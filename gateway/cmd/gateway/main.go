@@ -9,6 +9,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/otavioajr/tracker/gateway/internal/alerts"
 	"github.com/otavioajr/tracker/gateway/internal/config"
@@ -32,7 +33,13 @@ func main() {
 	defer cancel()
 
 	// Shared database pool
-	pool, err := pgxpool.New(ctx, cfg.DatabaseURL)
+	poolCfg, err := pgxpool.ParseConfig(cfg.DatabaseURL)
+	if err != nil {
+		logger.Error("failed to parse database config", "error", err)
+		os.Exit(1)
+	}
+	poolCfg.ConnConfig.DefaultQueryExecMode = pgx.QueryExecModeSimpleProtocol
+	pool, err := pgxpool.NewWithConfig(ctx, poolCfg)
 	if err != nil {
 		logger.Error("failed to connect to database", "error", err)
 		os.Exit(1)
