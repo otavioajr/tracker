@@ -12,6 +12,31 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.4"
   }
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json
+          operationName?: string
+          query?: string
+          variables?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
   public: {
     Tables: {
       alert_rules: {
@@ -215,6 +240,7 @@ export type Database = {
           server_time: string
           speed: number | null
           tenant_id: string
+          vehicle_id: string | null
         }
         Insert: {
           altitude?: number | null
@@ -229,6 +255,7 @@ export type Database = {
           server_time?: string
           speed?: number | null
           tenant_id: string
+          vehicle_id?: string | null
         }
         Update: {
           altitude?: number | null
@@ -243,6 +270,7 @@ export type Database = {
           server_time?: string
           speed?: number | null
           tenant_id?: string
+          vehicle_id?: string | null
         }
         Relationships: []
       }
@@ -260,6 +288,7 @@ export type Database = {
           server_time: string
           speed: number | null
           tenant_id: string
+          vehicle_id: string | null
         }
         Insert: {
           altitude?: number | null
@@ -274,6 +303,7 @@ export type Database = {
           server_time?: string
           speed?: number | null
           tenant_id: string
+          vehicle_id?: string | null
         }
         Update: {
           altitude?: number | null
@@ -288,6 +318,7 @@ export type Database = {
           server_time?: string
           speed?: number | null
           tenant_id?: string
+          vehicle_id?: string | null
         }
         Relationships: []
       }
@@ -305,6 +336,7 @@ export type Database = {
           server_time: string
           speed: number | null
           tenant_id: string
+          vehicle_id: string | null
         }
         Insert: {
           altitude?: number | null
@@ -319,6 +351,7 @@ export type Database = {
           server_time?: string
           speed?: number | null
           tenant_id: string
+          vehicle_id?: string | null
         }
         Update: {
           altitude?: number | null
@@ -333,6 +366,7 @@ export type Database = {
           server_time?: string
           speed?: number | null
           tenant_id?: string
+          vehicle_id?: string | null
         }
         Relationships: []
       }
@@ -1566,6 +1600,9 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {
       alert_severity: ["info", "warning", "critical"],

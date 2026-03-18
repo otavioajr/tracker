@@ -77,8 +77,7 @@ export async function getPositionHistory(
 ): Promise<VehiclePosition[]> {
   const supabase = await createClient();
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data, error } = await (supabase as any)
+  const { data, error } = await supabase
     .from("positions")
     .select("device_id, vehicle_id, location, speed, heading, ignition, device_time")
     .eq("vehicle_id", vehicleId)
@@ -86,17 +85,18 @@ export async function getPositionHistory(
     .lte("device_time", endDate)
     .order("device_time", { ascending: true });
 
-  if (error) throw new Error((error as { message: string }).message);
+  if (error) throw new Error(error.message);
   if (!data) return [];
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const mapped: (VehiclePosition | null)[] = (data as any[]).map((pos) => {
+  const positions: VehiclePosition[] = [];
+
+  for (const pos of data) {
     const location = pos.location as GeoJsonPoint;
-    if (!location || location.type !== "Point") return null;
+    if (!location || location.type !== "Point") continue;
 
     const [longitude, latitude] = location.coordinates;
 
-    return {
+    positions.push({
       device_id: pos.device_id,
       vehicle_id: pos.vehicle_id ?? undefined,
       latitude,
@@ -105,8 +105,8 @@ export async function getPositionHistory(
       heading: pos.heading ?? 0,
       ignition: pos.ignition ?? false,
       device_time: pos.device_time,
-    };
-  });
+    });
+  }
 
-  return mapped.filter((p): p is VehiclePosition => p !== null);
+  return positions;
 }
