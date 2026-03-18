@@ -3,11 +3,12 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { Car, Cpu, Map, Bell, FileText, ChevronLeft, ChevronRight } from "lucide-react";
+import { Car, Clock, Cpu, Map, Bell, FileText, ChevronLeft, ChevronRight } from "lucide-react";
 import { useState } from "react";
 
 const navItems = [
   { href: "/", label: "Mapa", icon: Map },
+  { href: "/history", label: "Historico", icon: Clock },
   { href: "/vehicles", label: "Veiculos", icon: Car },
   { href: "/devices", label: "Dispositivos", icon: Cpu },
   { href: "/alerts", label: "Alertas", icon: Bell },
