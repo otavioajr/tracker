@@ -1,0 +1,87 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import dynamic from "next/dynamic";
+
+type VehiclePosition = {
+  device_id: string;
+  latitude: number;
+  longitude: number;
+  speed: number;
+  heading: number;
+  ignition: boolean;
+  device_time: string;
+  plate?: string;
+};
+
+const SAO_PAULO: [number, number] = [-23.55, -46.63];
+
+const MapContainer = dynamic(
+  () => import("react-leaflet").then((m) => m.MapContainer),
+  { ssr: false }
+);
+
+const TileLayer = dynamic(
+  () => import("react-leaflet").then((m) => m.TileLayer),
+  { ssr: false }
+);
+
+const VehicleMarkerDynamic = dynamic(
+  () => import("./vehicle-marker").then((m) => m.VehicleMarker),
+  { ssr: false }
+);
+
+type TrackingMapProps = {
+  positions: VehiclePosition[];
+  className?: string;
+};
+
+export function TrackingMap({ positions, className }: TrackingMapProps) {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const center: [number, number] =
+    positions.length > 0
+      ? [positions[0].latitude, positions[0].longitude]
+      : SAO_PAULO;
+
+  if (!mounted) {
+    return (
+      <div
+        className={className}
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          background: "#f3f4f6",
+          borderRadius: 8,
+          minHeight: 400,
+          color: "#6b7280",
+          fontSize: 14,
+        }}
+      >
+        Carregando mapa...
+      </div>
+    );
+  }
+
+  return (
+    <MapContainer
+      center={center}
+      zoom={12}
+      style={{ width: "100%", minHeight: 400, borderRadius: 8 }}
+      className={className}
+    >
+      <TileLayer
+        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+      />
+      {positions.map((pos) => (
+        <VehicleMarkerDynamic key={pos.device_id} position={pos} />
+      ))}
+    </MapContainer>
+  );
+}
