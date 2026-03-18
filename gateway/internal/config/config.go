@@ -1,22 +1,32 @@
-// gateway/internal/config/config.go
 package config
 
 import (
 	"fmt"
 	"os"
 	"strconv"
+	"time"
 )
 
 type Config struct {
-	TCPPort     int
-	DatabaseURL string
-	MetricsPort int
+	TCPPort            int
+	DatabaseURL        string
+	MetricsPort        int
+	RuleSyncInterval   time.Duration
+	BufferCapacity     int
+	FlushInterval      time.Duration
+	FlushSize          int
+	BufferFallbackPath string
 }
 
 func Load() (*Config, error) {
 	cfg := &Config{
-		TCPPort:     5001,
-		MetricsPort: 9090,
+		TCPPort:            5001,
+		MetricsPort:        9090,
+		RuleSyncInterval:   30 * time.Second,
+		BufferCapacity:     10000,
+		FlushInterval:      time.Second,
+		FlushSize:          100,
+		BufferFallbackPath: "./buffer.jsonl",
 	}
 
 	if port := os.Getenv("TCP_PORT"); port != "" {
@@ -38,6 +48,42 @@ func Load() (*Config, error) {
 			return nil, fmt.Errorf("invalid METRICS_PORT: %w", err)
 		}
 		cfg.MetricsPort = p
+	}
+
+	if interval := os.Getenv("RULE_SYNC_INTERVAL"); interval != "" {
+		d, err := time.ParseDuration(interval)
+		if err != nil {
+			return nil, fmt.Errorf("invalid RULE_SYNC_INTERVAL: %w", err)
+		}
+		cfg.RuleSyncInterval = d
+	}
+
+	if cap := os.Getenv("BUFFER_CAPACITY"); cap != "" {
+		c, err := strconv.Atoi(cap)
+		if err != nil {
+			return nil, fmt.Errorf("invalid BUFFER_CAPACITY: %w", err)
+		}
+		cfg.BufferCapacity = c
+	}
+
+	if interval := os.Getenv("FLUSH_INTERVAL"); interval != "" {
+		d, err := time.ParseDuration(interval)
+		if err != nil {
+			return nil, fmt.Errorf("invalid FLUSH_INTERVAL: %w", err)
+		}
+		cfg.FlushInterval = d
+	}
+
+	if size := os.Getenv("FLUSH_SIZE"); size != "" {
+		s, err := strconv.Atoi(size)
+		if err != nil {
+			return nil, fmt.Errorf("invalid FLUSH_SIZE: %w", err)
+		}
+		cfg.FlushSize = s
+	}
+
+	if path := os.Getenv("BUFFER_FALLBACK_PATH"); path != "" {
+		cfg.BufferFallbackPath = path
 	}
 
 	return cfg, nil
