@@ -1,0 +1,15 @@
+# docker-compose.yml — Phase 2: Self-hosted setup
+# For now, we use Supabase Cloud + Oracle Cloud + Vercel (all free tier)
+# This file will be populated when migrating to VPS self-hosted
+
+version: "3.8"
+
+services:
+  # Uncomment when migrating to Phase 2
+  # gateway:
+  #   build: ./gateway
+  #   ports:
+  #     - "5001:5001"
+  #     - "9090:9090"
+  #   env_file: .env
+  #   restart: unless-stopped
