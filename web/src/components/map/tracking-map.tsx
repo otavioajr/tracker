@@ -26,6 +26,19 @@ const TileLayer = dynamic(
   { ssr: false }
 );
 
+const LayersControl = dynamic(
+  () => import("react-leaflet").then((m) => m.LayersControl),
+  { ssr: false }
+);
+
+const LayersControlBaseLayer = dynamic(
+  () => import("react-leaflet").then((m) => {
+    const LC = m.LayersControl;
+    return { default: LC.BaseLayer };
+  }),
+  { ssr: false }
+);
+
 const VehicleMarkerDynamic = dynamic(
   () => import("./vehicle-marker").then((m) => m.VehicleMarker),
   { ssr: false }
@@ -75,10 +88,32 @@ export function TrackingMap({ positions, className }: TrackingMapProps) {
       style={{ width: "100%", minHeight: 400, borderRadius: 8 }}
       className={className}
     >
-      <TileLayer
-        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-      />
+      <LayersControl position="topright">
+        <LayersControlBaseLayer checked name="Ruas">
+          <TileLayer
+            attribution='&copy; <a href="https://carto.com/">CARTO</a>'
+            url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
+          />
+        </LayersControlBaseLayer>
+        <LayersControlBaseLayer name="Detalhado">
+          <TileLayer
+            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          />
+        </LayersControlBaseLayer>
+        <LayersControlBaseLayer name="Satelite">
+          <TileLayer
+            attribution='&copy; Esri'
+            url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+          />
+        </LayersControlBaseLayer>
+        <LayersControlBaseLayer name="Escuro">
+          <TileLayer
+            attribution='&copy; <a href="https://carto.com/">CARTO</a>'
+            url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+          />
+        </LayersControlBaseLayer>
+      </LayersControl>
       {positions.map((pos) => (
         <VehicleMarkerDynamic key={pos.device_id} position={pos} />
       ))}
