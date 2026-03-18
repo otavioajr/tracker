@@ -17,8 +17,8 @@ export function DashboardMap({ initialPositions }: DashboardMapProps) {
       <div
         style={{
           position: "absolute",
-          top: 12,
-          right: 12,
+          bottom: 12,
+          left: 12,
           zIndex: 1000,
           background: "white",
           borderRadius: 8,
