@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
-import { getDevices } from "@/lib/actions/devices";
+import { getVehicles } from "@/lib/actions/vehicles";
 import { getPositionHistory, VehiclePosition } from "@/lib/actions/positions";
 
 const SAO_PAULO: [number, number] = [-23.55, -46.63];
@@ -40,16 +40,15 @@ const LayersControlBaseLayer = dynamic(
   { ssr: false }
 );
 
-type Device = {
+type Vehicle = {
   id: string;
-  imei: string;
-  vehicles: { id: string; plate: string } | { id: string; plate: string }[] | null;
+  plate: string;
 };
 
 export function HistoryPlayer() {
   const [mounted, setMounted] = useState(false);
-  const [devices, setDevices] = useState<Device[]>([]);
-  const [deviceId, setDeviceId] = useState("");
+  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  const [vehicleId, setVehicleId] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [positions, setPositions] = useState<VehiclePosition[]>([]);
@@ -61,12 +60,12 @@ export function HistoryPlayer() {
 
   useEffect(() => {
     setMounted(true);
-    getDevices()
+    getVehicles()
       .then((data) => {
-        setDevices((data as Device[]) ?? []);
-        if (data && data.length > 0) setDeviceId(data[0].id);
+        setVehicles((data as Vehicle[]) ?? []);
+        if (data && data.length > 0) setVehicleId(data[0].id);
       })
-      .catch(() => setError("Erro ao carregar dispositivos"));
+      .catch(() => setError("Erro ao carregar veiculos"));
   }, []);
 
   useEffect(() => {
@@ -89,7 +88,7 @@ export function HistoryPlayer() {
   }, [playing, positions.length]);
 
   async function handleSearch() {
-    if (!deviceId || !startDate || !endDate) {
+    if (!vehicleId || !startDate || !endDate) {
       setError("Preencha todos os campos");
       return;
     }
@@ -102,7 +101,7 @@ export function HistoryPlayer() {
       // Convert to ISO with local timezone offset for correct UTC comparison
       const start = new Date(startDate).toISOString();
       const end = new Date(endDate).toISOString();
-      const data = await getPositionHistory(deviceId, start, end);
+      const data = await getPositionHistory(vehicleId, start, end);
       setPositions(data);
       if (data.length === 0) setError("Nenhuma posicao encontrada no periodo");
     } catch {
@@ -139,30 +138,22 @@ export function HistoryPlayer() {
       ? [positions[0].latitude, positions[0].longitude]
       : SAO_PAULO;
 
-  function getDeviceLabel(device: Device): string {
-    const vehicles = device.vehicles;
-    const plate = Array.isArray(vehicles)
-      ? vehicles[0]?.plate
-      : vehicles?.plate;
-    return plate ? `${plate} (${device.imei})` : device.imei;
-  }
-
   return (
     <div className="flex flex-col gap-4 h-full">
       {/* Controls */}
       <div className="flex flex-wrap gap-3 items-end">
         <div className="flex flex-col gap-1">
           <label className="text-sm font-medium text-muted-foreground">
-            Dispositivo
+            Veiculo
           </label>
           <select
-            value={deviceId}
-            onChange={(e) => setDeviceId(e.target.value)}
+            value={vehicleId}
+            onChange={(e) => setVehicleId(e.target.value)}
             className="h-9 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
           >
-            {devices.map((d) => (
-              <option key={d.id} value={d.id}>
-                {getDeviceLabel(d)}
+            {vehicles.map((v) => (
+              <option key={v.id} value={v.id}>
+                {v.plate}
               </option>
             ))}
           </select>

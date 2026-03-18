@@ -15,8 +15,9 @@ import (
 
 // DeviceInfo maps an IMEI to its database IDs.
 type DeviceInfo struct {
-	DeviceID string
-	TenantID string
+	DeviceID  string
+	TenantID  string
+	VehicleID *string
 }
 
 // Writer batches GPS positions and flushes them to PostgreSQL.
@@ -65,7 +66,11 @@ func NewWriter(cfg WriterConfig) *Writer {
 
 // LoadDevices fetches all active devices from the database and caches them.
 func (w *Writer) LoadDevices(ctx context.Context) error {
-	rows, err := w.pool.Query(ctx, "SELECT id, tenant_id, imei FROM devices WHERE active = true")
+	rows, err := w.pool.Query(ctx,
+		`SELECT d.id, d.tenant_id, d.imei, v.id
+		 FROM devices d
+		 LEFT JOIN vehicles v ON v.device_id = d.id
+		 WHERE d.active = true`)
 	if err != nil {
 		return fmt.Errorf("storage: failed to load devices: %w", err)
 	}
@@ -74,10 +79,11 @@ func (w *Writer) LoadDevices(ctx context.Context) error {
 	devices := make(map[string]DeviceInfo)
 	for rows.Next() {
 		var id, tenantID, imei string
-		if err := rows.Scan(&id, &tenantID, &imei); err != nil {
+		var vehicleID *string
+		if err := rows.Scan(&id, &tenantID, &imei, &vehicleID); err != nil {
 			return fmt.Errorf("storage: failed to scan device: %w", err)
 		}
-		devices[imei] = DeviceInfo{DeviceID: id, TenantID: tenantID}
+		devices[imei] = DeviceInfo{DeviceID: id, TenantID: tenantID, VehicleID: vehicleID}
 	}
 
 	w.mu.Lock()
@@ -188,18 +194,18 @@ func buildBatchInsert(positions []*protocol.Position, devices map[string]DeviceI
 		rawJSON, _ := json.Marshal(map[string]string{"raw": pos.RawData})
 
 		values = append(values, fmt.Sprintf(
-			"($%d, $%d, ST_SetSRID(ST_MakePoint($%d, $%d), 4326), $%d, $%d, $%d, $%d, $%d, $%d::jsonb, $%d, now())",
-			paramIdx, paramIdx+1, paramIdx+2, paramIdx+3,
-			paramIdx+4, paramIdx+5, paramIdx+6, paramIdx+7,
-			paramIdx+8, paramIdx+9, paramIdx+10,
+			"($%d, $%d, $%d, ST_SetSRID(ST_MakePoint($%d, $%d), 4326), $%d, $%d, $%d, $%d, $%d, $%d::jsonb, $%d, now())",
+			paramIdx, paramIdx+1, paramIdx+2, paramIdx+3, paramIdx+4,
+			paramIdx+5, paramIdx+6, paramIdx+7, paramIdx+8,
+			paramIdx+9, paramIdx+10, paramIdx+11,
 		))
 		args = append(args,
-			info.DeviceID, info.TenantID,
+			info.DeviceID, info.TenantID, info.VehicleID,
 			pos.Longitude, pos.Latitude,
 			pos.Speed, pos.Heading, pos.Ignition, pos.Altitude,
 			pos.Satellites, string(rawJSON), pos.DeviceTime,
 		)
-		paramIdx += 11
+		paramIdx += 12
 	}
 
 	if len(values) == 0 {
@@ -207,7 +213,7 @@ func buildBatchInsert(positions []*protocol.Position, devices map[string]DeviceI
 	}
 
 	sql := fmt.Sprintf(
-		"INSERT INTO positions (device_id, tenant_id, location, speed, heading, ignition, altitude, satellites, raw_data, device_time, server_time) VALUES %s",
+		"INSERT INTO positions (device_id, tenant_id, vehicle_id, location, speed, heading, ignition, altitude, satellites, raw_data, device_time, server_time) VALUES %s",
 		strings.Join(values, ", "),
 	)
 

@@ -1,11 +1,14 @@
 package storage
 
 import (
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/otavioajr/tracker/gateway/internal/protocol"
 )
+
+func ptrStr(s string) *string { return &s }
 
 func TestBuildBatchSQL(t *testing.T) {
 	positions := []*protocol.Position{
@@ -34,8 +37,8 @@ func TestBuildBatchSQL(t *testing.T) {
 	}
 
 	devices := map[string]DeviceInfo{
-		"123456789012345": {DeviceID: "d0000000-0000-0000-0000-000000000001", TenantID: "a0000000-0000-0000-0000-000000000001"},
-		"123456789012346": {DeviceID: "d0000000-0000-0000-0000-000000000002", TenantID: "a0000000-0000-0000-0000-000000000001"},
+		"123456789012345": {DeviceID: "d0000000-0000-0000-0000-000000000001", TenantID: "a0000000-0000-0000-0000-000000000001", VehicleID: ptrStr("v0000000-0000-0000-0000-000000000001")},
+		"123456789012346": {DeviceID: "d0000000-0000-0000-0000-000000000002", TenantID: "a0000000-0000-0000-0000-000000000001", VehicleID: nil},
 	}
 
 	sql, args := buildBatchInsert(positions, devices)
@@ -43,8 +46,12 @@ func TestBuildBatchSQL(t *testing.T) {
 	if sql == "" {
 		t.Fatal("expected non-empty SQL")
 	}
-	if len(args) != 22 {
-		t.Errorf("expected 22 args, got %d", len(args))
+	if !strings.Contains(sql, "vehicle_id") {
+		t.Error("expected SQL to contain vehicle_id")
+	}
+	// 2 positions × 12 args each = 24 args
+	if len(args) != 24 {
+		t.Errorf("expected 24 args, got %d", len(args))
 	}
 }
 
