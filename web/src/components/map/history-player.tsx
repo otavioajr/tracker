@@ -85,7 +85,11 @@ export function HistoryPlayer() {
     setPlaying(false);
     setCurrentIndex(0);
     try {
-      const data = await getPositionHistory(deviceId, startDate, endDate);
+      // datetime-local returns "2026-03-18T10:00" without timezone
+      // Convert to ISO with local timezone offset for correct UTC comparison
+      const start = new Date(startDate).toISOString();
+      const end = new Date(endDate).toISOString();
+      const data = await getPositionHistory(deviceId, start, end);
       setPositions(data);
       if (data.length === 0) setError("Nenhuma posicao encontrada no periodo");
     } catch {
