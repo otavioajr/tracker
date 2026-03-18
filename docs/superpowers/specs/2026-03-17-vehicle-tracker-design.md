@@ -25,11 +25,37 @@ Plataforma SaaS multi-tenant de rastreamento veicular. Dispositivos GPS (começa
 ### Fluxo de Dados
 
 ```
-Dispositivo GPS → TCP/GPRS → Go Gateway (Oracle) → INSERT → PostgreSQL (Supabase)
-                                                         → Supabase Realtime detecta INSERT via WAL
-                                                         → WebSocket broadcast
-                                                         → Next.js (Vercel) → Mapa do cliente atualiza
+Dispositivo GPS → TCP/GPRS → Go Gateway (Oracle)
+    → Gateway parseia protocolo Suntech, valida IMEI
+    → INSERT posição no PostgreSQL (Supabase) via connection pooler
+    → Supabase Realtime detecta INSERT via WAL
+    → Broadcast via WebSocket para clientes subscritos (filtro: tenant_id)
+    → Next.js (Vercel) recebe via Supabase SDK → Mapa atualiza em tempo real
 ```
+
+### Supabase Realtime — Estratégia de Subscription
+
+O cliente Next.js se inscreve nas mudanças da tabela `positions` usando o Supabase Realtime SDK:
+
+```typescript
+supabase.channel('positions')
+  .on('postgres_changes', {
+    event: 'INSERT',
+    schema: 'public',
+    table: 'positions',
+    filter: `tenant_id=eq.${user.tenant_id}`
+  }, (payload) => {
+    // Atualizar posição no mapa
+  })
+  .subscribe()
+```
+
+**Requisitos para funcionar:**
+- RLS habilitado na tabela `positions` com policy `SELECT` filtrando por `tenant_id` do JWT
+- O Go Gateway conecta via **connection string direta** (não PostgREST) usando a `service_role` key para INSERTs
+- O cliente subscribe usando seu JWT de usuário — Supabase Realtime filtra automaticamente via RLS
+
+**Limites do free tier:** 200 conexões WebSocket simultâneas, 100 eventos/segundo. Na Fase 1 (validação com poucos clientes), isso é suficiente. Na Fase 2, o Supabase self-hosted remove esses limites.
 
 ### Componentes
 
@@ -37,7 +63,7 @@ Dispositivo GPS → TCP/GPRS → Go Gateway (Oracle) → INSERT → PostgreSQL (
 
 Servidor TCP que recebe dados brutos dos rastreadores e transforma em posições padronizadas.
 
-- **TCP Listener** (:5001) — 1 goroutine por conexão persistente
+- **TCP Listener** (:5001) — 1 goroutine por conexão persistente. Na Oracle Cloud Always Free, abrir porta TCP 5001 no Security List da VCN
 - **Connection Manager** — registro por IMEI, heartbeat 30s, auto-cleanup de conexões mortas
 - **Protocol Router** — interface `Parser` extensível:
   ```go
@@ -49,9 +75,12 @@ Servidor TCP que recebe dados brutos dos rastreadores e transforma em posições
   ```
   - Implementação inicial: `SuntechParser`
   - Extensível para Coban, Teltonika, etc. sem mexer no core
-- **PostgreSQL Writer** — batch insert (a cada 1s ou 100 posições)
-- **Redis Publisher** — removido, substituído por Supabase Realtime
-- **Alert Engine** — checa regras carregadas em memória contra cada posição recebida. Grava alertas no banco → Supabase Realtime notifica o cliente
+- **PostgreSQL Writer** — batch insert (a cada 1s ou 100 posições) via connection pooler do Supabase. **Buffer em memória com fallback em disco:** se a conexão com o Supabase cair, posições são acumuladas em um buffer circular em memória (até 10k posições) e persistidas em arquivo local se o buffer encher. Quando a conexão restabelecer, o buffer é drenado em ordem. No startup, o Gateway verifica se há arquivo de fallback pendente e drena antes de aceitar novas conexões. Nenhuma posição é perdida.
+- **Alert Engine** — checa regras contra cada posição recebida:
+  - **Velocidade/Ignição/Bateria:** regras carregadas em memória, avaliadas no Gateway
+  - **Geocercas:** delegadas ao PostgreSQL via query PostGIS `ST_Within` no momento do INSERT (trigger ou função pós-insert), evitando sincronizar geometrias complexas para o Gateway
+- **Rule Sync** — o Gateway faz polling da tabela `alert_rules` a cada 30 segundos para atualizar o cache em memória (apenas regras de velocidade/ignição/bateria — geocercas são avaliadas diretamente no PostgreSQL e não precisam de cache no Gateway). Na Fase 2, pode ser substituído por notificação HTTP do Next.js quando regras mudam.
+- **Observabilidade:** log estruturado (JSON), métricas expostas via endpoint HTTP (:9090, acessível apenas via localhost/SSH tunnel — NÃO abrir no Security List da VCN) — conexões ativas, posições/s, erros, latência de INSERT
 
 **2. Web Platform (Next.js) — Vercel**
 
@@ -64,23 +93,26 @@ Frontend PWA + API routes usando Supabase SDK.
 - **Validação:** Zod
 - **ORM:** Drizzle ORM + Drizzle Kit (migrations)
 
-**API Routes:**
+**API Routes (prefixo `/api/v1`):**
 
 | Método | Rota | Descrição |
 |---|---|---|
-| POST | /api/auth/login | Login |
-| POST | /api/auth/register | Registro |
-| GET | /api/auth/me | Usuário atual |
-| GET/POST/PUT | /api/vehicles | CRUD veículos |
-| GET/POST | /api/devices | CRUD dispositivos |
-| GET | /api/devices/:id/positions | Posições de um device |
-| GET/POST/DEL | /api/geofences | CRUD geocercas |
-| GET | /api/alerts | Listar alertas |
-| PUT | /api/alerts/:id/read | Marcar como lido |
-| GET/POST/PUT | /api/alert-rules | CRUD regras de alerta |
-| GET | /api/reports/trips | Relatório de viagens |
-| GET | /api/reports/stops | Relatório de paradas |
-| GET | /api/reports/mileage | Relatório de km rodado |
+| POST | /api/v1/auth/login | Login |
+| POST | /api/v1/auth/register | Registro |
+| GET | /api/v1/auth/me | Usuário atual |
+| GET/POST/PUT | /api/v1/vehicles | CRUD veículos |
+| PUT | /api/v1/vehicles/:id/device | Associar/desassociar device |
+| GET/POST/PUT/DEL | /api/v1/devices | CRUD dispositivos |
+| GET | /api/v1/devices/:id/positions | Posições de um device |
+| GET/POST/PUT/DEL | /api/v1/geofences | CRUD geocercas |
+| GET | /api/v1/alerts | Listar alertas |
+| PUT | /api/v1/alerts/:id/read | Marcar como lido |
+| GET/POST/PUT/DEL | /api/v1/alert-rules | CRUD regras de alerta |
+| GET | /api/v1/reports/trips | Relatório de viagens |
+| GET | /api/v1/reports/stops | Relatório de paradas |
+| GET | /api/v1/reports/mileage | Relatório de km rodado |
+
+**Paginação:** todos os endpoints de listagem usam paginação cursor-based com parâmetros `cursor` e `limit` (default 50, max 200). Responses incluem `next_cursor` para a próxima página.
 
 **Telas do Cliente (PWA):**
 
@@ -96,6 +128,11 @@ Frontend PWA + API routes usando Supabase SDK.
 - Monitorar dispositivos conectados e status de comunicação
 - Dashboard geral — total de devices, posições/dia, alertas, clientes ativos
 
+**Fluxo de Onboarding:**
+1. Admin cria tenant via painel admin
+2. Admin cria o primeiro usuário do tenant (Supabase Auth cria em `auth.users`, trigger cria perfil em `public.profiles`)
+3. Usuário recebe e-mail de confirmação, faz login, cadastra seus veículos e devices
+
 ## Modelo de Dados
 
 ### tenants
@@ -108,16 +145,17 @@ Frontend PWA + API routes usando Supabase SDK.
 | active | BOOLEAN | |
 | created_at / updated_at | TIMESTAMPTZ | |
 
-### users
+### profiles
 | Campo | Tipo | Notas |
 |---|---|---|
-| id | UUID (PK) | |
+| id | UUID (PK) | Mesmo UUID do `auth.users.id` |
 | tenant_id | UUID (FK → tenants) | |
-| email | TEXT (UNIQUE) | |
-| password_hash | TEXT | Gerenciado pelo Supabase Auth |
 | role | ENUM (admin_platform, client) | |
+| full_name | TEXT | |
 | active | BOOLEAN | |
 | created_at / updated_at | TIMESTAMPTZ | |
+
+> **Nota:** Tabela `profiles` é uma extensão do `auth.users` do Supabase. Não armazena email nem senha — esses dados vivem exclusivamente em `auth.users`. Um trigger `on_auth_user_created` cria o perfil automaticamente no signup.
 
 ### devices
 | Campo | Tipo | Notas |
@@ -136,7 +174,7 @@ Frontend PWA + API routes usando Supabase SDK.
 |---|---|---|
 | id | UUID (PK) | |
 | tenant_id | UUID (FK → tenants) | |
-| device_id | UUID (FK → devices, NULLABLE) | Nullable — veículo pode estar sem rastreador |
+| device_id | UUID (FK → devices, NULLABLE, UNIQUE) | Nullable — veículo pode estar sem rastreador. UNIQUE garante que um device não seja atribuído a dois veículos |
 | plate | TEXT | |
 | brand / model / year | TEXT / TEXT / INT | |
 | color | TEXT | |
@@ -159,7 +197,7 @@ Frontend PWA + API routes usando Supabase SDK.
 | device_time | TIMESTAMPTZ | Timestamp do dispositivo |
 | server_time | TIMESTAMPTZ | Timestamp do servidor |
 
-> **Particionada por mês** — tabela de maior volume, particionamento facilita queries por período e limpeza de dados antigos.
+> **Particionada por mês** (chave: `server_time`) — tabela de maior volume. Partições criadas automaticamente via pg_cron job que roda no 1º dia de cada mês, criando a partição do próximo mês. Na Fase 1 sem pg_cron, o Gateway executa `CREATE TABLE IF NOT EXISTS` da partição do mês atual no startup e a cada virada de mês.
 
 ### geofences
 | Campo | Tipo | Notas |
@@ -190,19 +228,46 @@ Frontend PWA + API routes usando Supabase SDK.
 |---|---|---|
 | id | UUID (PK) | |
 | tenant_id | UUID (FK → tenants) | |
-| vehicle_id | UUID (FK → vehicles, NULLABLE) | Null = aplica a todos |
+| device_id | UUID (FK → devices, NULLABLE) | Null = aplica a todos do tenant |
 | type | ENUM (speed, geofence, ignition, battery) | |
-| config | JSONB | Ex: {"max_speed": 120} |
+| config | JSONB | Ex: {"max_speed": 120, "geofence_id": "uuid"} |
 | notify_email | BOOLEAN | |
 | active | BOOLEAN | |
 | created_at / updated_at | TIMESTAMPTZ | |
 
+> **Nota:** `alert_rules` referencia `device_id` (não `vehicle_id`) porque o Alert Engine no Gateway processa posições por device. A associação device→vehicle é resolvida na camada de apresentação (Next.js).
+
 ### Decisões de Modelagem
 
 - **Multi-tenancy via `tenant_id`** em todas as tabelas + Row Level Security (RLS) no PostgreSQL
+- **`profiles` em vez de `users`** — extensão do `auth.users` do Supabase, sem duplicar email/senha
 - **Device separado de Vehicle** — um rastreador pode ser movido entre veículos
+- **`alert_rules` referencia `device_id`** — alinhado com o processamento no Gateway que trabalha por device
 - **`raw_data` JSONB em positions** — guarda dado bruto do protocolo para debug e extração futura de campos sem migration
-- **Particionamento mensal em `positions`** — a tabela que mais cresce
+- **Particionamento mensal em `positions`** — a tabela que mais cresce, particionada por `server_time`
+
+## Volume de Dados e Retenção
+
+### Cálculo de volume
+
+Assumindo intervalo de envio de 30 segundos por device e ~500 bytes por row:
+
+| Devices | Rows/dia | Volume/dia | Volume/mês |
+|---|---|---|---|
+| 10 | 28.800 | ~14 MB | ~420 MB |
+| 50 | 144.000 | ~72 MB | ~2.1 GB |
+| 100 | 288.000 | ~144 MB | ~4.3 GB |
+| 500 | 1.440.000 | ~720 MB | ~21 GB |
+
+### Fase 1 — Free tier (limite 500MB)
+
+O free tier do Supabase suporta confortavelmente **até ~10-15 devices** com retenção de 30 dias. Isso é suficiente para validação do produto com primeiros clientes beta.
+
+### Política de retenção
+
+- **Fase 1:** Retenção de 30 dias. Job no Gateway executa `DROP` da partição mais antiga mensalmente
+- **Fase 2 (self-hosted):** Retenção configurável por plano do tenant (30, 60, 90 dias). Partições antigas movidas para cold storage (backup comprimido) antes de drop
+- **Futuro:** TimescaleDB com compression policies para retenção longa com custo baixo de armazenamento
 
 ## Infraestrutura
 
@@ -210,13 +275,16 @@ Frontend PWA + API routes usando Supabase SDK.
 
 | Provedor | Serviço | Limites Free Tier |
 |---|---|---|
-| **Supabase Cloud** | PostgreSQL + PostGIS, Auth, Realtime, Studio | 500MB banco, 50k auth users |
+| **Supabase Cloud** | PostgreSQL + PostGIS, Auth, Realtime, Studio | 500MB banco, 200 WS connections, 50k auth users |
 | **Oracle Cloud** | Go Gateway (VM 1 vCPU, 1GB RAM) | Always Free — Go usa ~20-50MB RAM |
 | **Vercel** | Next.js (frontend + API routes) | 100GB bandwidth/mês |
 
 **Serviços externos:**
 - DNS: Cloudflare
 - E-mail alertas: Resend (free tier: 100 emails/dia)
+- Monitoramento: Sentry free tier (error tracking), UptimeRobot (uptime check)
+
+**Nota Oracle Cloud:** Abrir porta TCP 5001 no Security List da VCN para permitir conexões dos dispositivos GPS.
 
 ### Fase 2 — Monetizando → VPS Self-Hosted
 
@@ -229,8 +297,8 @@ Quando free tiers atingirem o limite e já houver receita:
 
 ### Caminho de Escala
 
-- **Fase 1 (0-500 devices):** Free tiers — $0/mês
-- **Fase 2 (500-2k devices):** VPS self-hosted — ~$30-50/mês
+- **Fase 1 (0-15 devices):** Free tiers — $0/mês (validação)
+- **Fase 2 (15-2k devices):** VPS self-hosted — ~$30-50/mês
 - **Fase 3 (2k-10k devices):** Gateway dedicado + múltiplas instâncias Next.js
 - **Fase 4 (10k+):** Kubernetes + TimescaleDB para positions
 
@@ -243,14 +311,15 @@ Quando free tiers atingirem o limite e já houver receita:
 ## Segurança
 
 - **Auth:** Supabase GoTrue — JWT, bcrypt, refresh tokens, rate limiting via Kong
-- **Multi-tenant:** RLS no PostgreSQL com policies por `tenant_id` extraído do JWT. Um tenant nunca acessa dados de outro
-- **Gateway TCP:** Validação de IMEI (só devices cadastrados), timeout 60s em conexões inativas, rate limiting por IP, sanitização de dados antes do INSERT
+- **Multi-tenant:** RLS no PostgreSQL com policies por `tenant_id` extraído do JWT (`auth.uid()` → `profiles.tenant_id`). Um tenant nunca acessa dados de outro
+- **Gateway TCP:** Validação de IMEI (só devices cadastrados), timeout 60s em conexões inativas, rate limiting por IP, sanitização de dados antes do INSERT, buffer local para resiliência
 - **Web:** HTTPS via Vercel, CORS restrito ao domínio, validação de input com Zod, headers de segurança (CSP, HSTS)
+- **API:** Versionamento (`/api/v1/`), rate limiting via middleware Vercel
 
 ## Testes
 
 - **Gateway (Go):**
-  - Unit: parser de cada protocolo (dado bruto → struct), alert engine (posição + regra → alerta?)
+  - Unit: parser de cada protocolo (dado bruto → struct), alert engine (posição + regra → alerta?), buffer de resiliência
   - Integration: conexão TCP fake → banco → verificar INSERT
   - Ferramentas: `go test`, testcontainers (PostgreSQL)
 
@@ -273,4 +342,6 @@ Quando free tiers atingirem o limite e já houver receita:
 | Validação | Zod | Integra com TypeScript |
 | UI | Tailwind + shadcn/ui | Produtivo, consistente |
 | Migrations | Drizzle Kit | Versionamento do schema |
-| Monorepo | Turborepo | Packages: gateway, web, shared types |
+| Estrutura do projeto | Diretórios `gateway/` e `web/` na raiz + Makefile | Go e TypeScript coexistem como projetos irmãos, Makefile orquestra comandos cross-project |
+| Logging (Gateway) | Log estruturado JSON | Facilita parsing e busca em produção |
+| Error tracking | Sentry (free tier) | Captura erros no Next.js e alertas do Gateway |
