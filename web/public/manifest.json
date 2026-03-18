@@ -1,0 +1,17 @@
+{
+  "name": "Tracker - Rastreamento Veicular",
+  "short_name": "Tracker",
+  "description": "Plataforma de rastreamento veicular em tempo real",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#09090b",
+  "theme_color": "#09090b",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "48x48",
+      "type": "image/x-icon"
+    }
+  ]
+}
