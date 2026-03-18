@@ -27,6 +27,19 @@ const CircleMarker = dynamic(
   { ssr: false }
 );
 
+const LayersControl = dynamic(
+  () => import("react-leaflet").then((m) => m.LayersControl),
+  { ssr: false }
+);
+
+const LayersControlBaseLayer = dynamic(
+  () => import("react-leaflet").then((m) => {
+    const LC = m.LayersControl;
+    return { default: LC.BaseLayer };
+  }),
+  { ssr: false }
+);
+
 type Device = {
   id: string;
   imei: string;
@@ -216,10 +229,32 @@ export function HistoryPlayer() {
             zoom={14}
             style={{ width: "100%", height: "100%", minHeight: 400 }}
           >
-            <TileLayer
-              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-            />
+            <LayersControl position="topright">
+              <LayersControlBaseLayer checked name="Ruas">
+                <TileLayer
+                  attribution='&copy; <a href="https://carto.com/">CARTO</a>'
+                  url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
+                />
+              </LayersControlBaseLayer>
+              <LayersControlBaseLayer name="Detalhado">
+                <TileLayer
+                  attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                />
+              </LayersControlBaseLayer>
+              <LayersControlBaseLayer name="Satelite">
+                <TileLayer
+                  attribution='&copy; Esri'
+                  url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+                />
+              </LayersControlBaseLayer>
+              <LayersControlBaseLayer name="Escuro">
+                <TileLayer
+                  attribution='&copy; <a href="https://carto.com/">CARTO</a>'
+                  url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+                />
+              </LayersControlBaseLayer>
+            </LayersControl>
             {routeCoords.length > 1 && (
               <Polyline positions={routeCoords} color="#3b82f6" weight={3} />
             )}
