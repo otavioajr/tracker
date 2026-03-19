@@ -15,6 +15,7 @@ type Position struct {
 	Battery    float64 // volts
 	DeviceTime time.Time
 	RawData    string // original message for debugging
+	RemoteAddr string // client IP:port, set by TCP handler
 }
 
 // Parser defines the interface that all device protocol parsers must implement.

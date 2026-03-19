@@ -67,7 +67,7 @@ func NewWriter(cfg WriterConfig) *Writer {
 // LoadDevices fetches all active devices from the database and caches them.
 func (w *Writer) LoadDevices(ctx context.Context) error {
 	rows, err := w.pool.Query(ctx,
-		`SELECT d.id, d.tenant_id, d.imei, v.id
+		`SELECT d.id, d.tenant_id, d.imei, d.serial_number, v.id
 		 FROM devices d
 		 LEFT JOIN vehicles v ON v.device_id = d.id
 		 WHERE d.active = true`)
@@ -79,11 +79,15 @@ func (w *Writer) LoadDevices(ctx context.Context) error {
 	devices := make(map[string]DeviceInfo)
 	for rows.Next() {
 		var id, tenantID, imei string
-		var vehicleID *string
-		if err := rows.Scan(&id, &tenantID, &imei, &vehicleID); err != nil {
+		var serialNumber, vehicleID *string
+		if err := rows.Scan(&id, &tenantID, &imei, &serialNumber, &vehicleID); err != nil {
 			return fmt.Errorf("storage: failed to scan device: %w", err)
 		}
-		devices[imei] = DeviceInfo{DeviceID: id, TenantID: tenantID, VehicleID: vehicleID}
+		info := DeviceInfo{DeviceID: id, TenantID: tenantID, VehicleID: vehicleID}
+		devices[imei] = info
+		if serialNumber != nil && *serialNumber != "" {
+			devices[*serialNumber] = info
+		}
 	}
 
 	w.mu.Lock()
@@ -177,6 +181,22 @@ func (w *Writer) UpdateLastCommunication(ctx context.Context, imei string) {
 // Close flushes remaining positions. Does NOT close the shared pool.
 func (w *Writer) Close() {
 	w.Flush(context.Background())
+}
+
+// StartDeviceReloader periodically reloads the device cache. Call in a goroutine.
+func (w *Writer) StartDeviceReloader(ctx context.Context, interval time.Duration) {
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			if err := w.LoadDevices(ctx); err != nil {
+				w.logger.Error("failed to reload devices", "error", err)
+			}
+		}
+	}
 }
 
 // buildBatchInsert constructs a multi-row INSERT statement.

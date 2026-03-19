@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -76,8 +77,11 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Protocol registry
-	registry := protocol.NewRegistry(protocol.NewSuntechParser())
+	// Pending device writer
+	pendingWriter := storage.NewPendingWriter(pool, logger)
+
+	// Protocol registry (binary must be checked before ASCII)
+	registry := protocol.NewRegistry(protocol.NewSuntechBinaryParser(), protocol.NewSuntechParser())
 
 	// Metrics
 	m := metrics.New(func() int64 { return 0 })
@@ -86,6 +90,7 @@ func main() {
 	gw := &gateway{
 		writer:      writer,
 		alertEngine: alertEngine,
+		pending:     pendingWriter,
 		pool:        pool,
 		metrics:     m,
 		logger:      logger,
@@ -102,6 +107,7 @@ func main() {
 
 	// Start background goroutines
 	go writer.StartFlusher(ctx)
+	go writer.StartDeviceReloader(ctx, 30*time.Second)
 	go alerts.NewSyncer(pool, alertEngine, cfg.RuleSyncInterval, logger).Start(ctx)
 	metricsServer := metrics.StartServer(fmt.Sprintf(":%d", cfg.MetricsPort), m, logger)
 
@@ -131,6 +137,7 @@ func main() {
 type gateway struct {
 	writer      *storage.Writer
 	alertEngine *alerts.Engine
+	pending     *storage.PendingWriter
 	pool        *pgxpool.Pool
 	metrics     *metrics.Metrics
 	logger      *slog.Logger
@@ -138,23 +145,20 @@ type gateway struct {
 
 func (g *gateway) HandlePosition(pos *protocol.Position) {
 	g.metrics.PositionsReceived.Add(1)
-	g.writer.Enqueue(pos)
 
 	info, ok := g.writer.LookupDevice(pos.IMEI)
 	if !ok {
+		g.pending.Track(context.Background(), pos.IMEI, "suntech", pos.RemoteAddr)
 		return
 	}
+
+	g.writer.Enqueue(pos)
 
 	triggered := g.alertEngine.Evaluate(pos, info.DeviceID, info.TenantID)
 	for _, alert := range triggered {
 		g.metrics.AlertsTriggered.Add(1)
 		g.saveAlert(alert)
 	}
-}
-
-func (g *gateway) IsRegistered(imei string) bool {
-	_, ok := g.writer.LookupDevice(imei)
-	return ok
 }
 
 func (g *gateway) saveAlert(alert alerts.Alert) {

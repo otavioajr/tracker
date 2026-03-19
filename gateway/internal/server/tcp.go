@@ -2,7 +2,9 @@ package server
 
 import (
 	"bufio"
+	"encoding/binary"
 	"fmt"
+	"io"
 	"log/slog"
 	"net"
 	"sync"
@@ -15,7 +17,6 @@ import (
 // PositionHandler processes parsed positions.
 type PositionHandler interface {
 	HandlePosition(pos *protocol.Position)
-	IsRegistered(imei string) bool
 }
 
 // Config for the TCP server.
@@ -118,46 +119,98 @@ func (s *Server) handleConnection(conn net.Conn) {
 	remoteAddr := conn.RemoteAddr().String()
 	s.logger.Debug("new connection", "remote", remoteAddr)
 
-	scanner := bufio.NewScanner(conn)
-	for scanner.Scan() {
+	reader := bufio.NewReader(conn)
+
+	for {
 		select {
 		case <-s.quit:
 			return
 		default:
 		}
 
-		line := scanner.Bytes()
-		if len(line) == 0 {
-			continue
-		}
-
 		conn.SetDeadline(time.Now().Add(s.config.IdleTimeout))
 
-		parser := s.registry.Find(line)
-		if parser == nil {
-			s.logger.Warn("unknown protocol", "remote", remoteAddr, "data", string(line[:min(len(line), 50)]))
+		frame, err := readFrame(reader)
+		if err != nil {
+			if err != io.EOF {
+				s.logger.Debug("connection closed", "remote", remoteAddr, "error", err)
+			}
+			return
+		}
+
+		if len(frame) == 0 {
 			continue
 		}
 
-		pos, err := parser.Parse(line)
+		parser := s.registry.Find(frame)
+		if parser == nil {
+			s.logger.Warn("unknown protocol", "remote", remoteAddr, "data", string(frame[:min(len(frame), 50)]))
+			continue
+		}
+
+		pos, err := parser.Parse(frame)
 		if err != nil {
 			s.logger.Warn("parse error", "protocol", parser.Name(), "error", err, "remote", remoteAddr)
 			continue
 		}
 
-		if !s.handler.IsRegistered(pos.IMEI) {
-			s.logger.Warn("unregistered device", "imei", pos.IMEI, "remote", remoteAddr)
-			continue
-		}
+		pos.RemoteAddr = remoteAddr
 
-		if ack := parser.ACK(line); ack != nil {
+		if ack := parser.ACK(frame); ack != nil {
 			conn.Write(ack)
 		}
 
 		s.handler.HandlePosition(pos)
 	}
+}
 
-	if err := scanner.Err(); err != nil {
-		s.logger.Debug("connection closed", "remote", remoteAddr, "error", err)
+// readFrame reads one protocol frame, auto-detecting binary (STX-framed) or ASCII (newline-delimited).
+func readFrame(r *bufio.Reader) ([]byte, error) {
+	// Peek at first byte to determine framing
+	first, err := r.Peek(1)
+	if err != nil {
+		return nil, err
 	}
+
+	if first[0] == 0x02 { // STX → binary frame
+		return readBinaryFrame(r)
+	}
+
+	// ASCII: read until \n
+	line, err := r.ReadBytes('\n')
+	if err != nil {
+		return nil, err
+	}
+	// Trim \r\n
+	for len(line) > 0 && (line[len(line)-1] == '\n' || line[len(line)-1] == '\r') {
+		line = line[:len(line)-1]
+	}
+	return line, nil
+}
+
+// readBinaryFrame reads a Suntech binary ZIP frame: STX(1) + LEN(2) + payload(LEN) + ETX(1).
+func readBinaryFrame(r *bufio.Reader) ([]byte, error) {
+	// Read STX + length header (3 bytes)
+	header := make([]byte, 3)
+	if _, err := io.ReadFull(r, header); err != nil {
+		return nil, fmt.Errorf("binary frame header: %w", err)
+	}
+
+	payloadLen := int(binary.BigEndian.Uint16(header[1:3]))
+	if payloadLen <= 0 || payloadLen > 4096 {
+		return nil, fmt.Errorf("binary frame: invalid length %d", payloadLen)
+	}
+
+	// Read payload + ETX
+	rest := make([]byte, payloadLen+1)
+	if _, err := io.ReadFull(r, rest); err != nil {
+		return nil, fmt.Errorf("binary frame payload: %w", err)
+	}
+
+	// Assemble full frame
+	frame := make([]byte, 3+payloadLen+1)
+	copy(frame, header)
+	copy(frame[3:], rest)
+
+	return frame, nil
 }

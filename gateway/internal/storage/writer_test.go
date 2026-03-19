@@ -55,6 +55,31 @@ func TestBuildBatchSQL(t *testing.T) {
 	}
 }
 
+func TestLookupDevice_DualKey(t *testing.T) {
+	info := DeviceInfo{DeviceID: "d1", TenantID: "t1"}
+	w := &Writer{
+		devices: map[string]DeviceInfo{
+			"imei123":   info,
+			"serial456": info,
+		},
+	}
+	got, ok := w.LookupDevice("imei123")
+	if !ok {
+		t.Fatal("expected found by IMEI")
+	}
+	if got.DeviceID != "d1" {
+		t.Errorf("got %s", got.DeviceID)
+	}
+	_, ok = w.LookupDevice("serial456")
+	if !ok {
+		t.Fatal("expected found by serial")
+	}
+	_, ok = w.LookupDevice("unknown")
+	if ok {
+		t.Fatal("expected not found")
+	}
+}
+
 func TestBuildBatchSQL_SkipsUnknownDevices(t *testing.T) {
 	positions := []*protocol.Position{
 		{IMEI: "unknown_imei", Latitude: -23.55, Longitude: -46.63, DeviceTime: time.Now(), RawData: "raw"},

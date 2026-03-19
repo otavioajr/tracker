@@ -12,31 +12,6 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.4"
   }
-  graphql_public: {
-    Tables: {
-      [_ in never]: never
-    }
-    Views: {
-      [_ in never]: never
-    }
-    Functions: {
-      graphql: {
-        Args: {
-          extensions?: Json
-          operationName?: string
-          query?: string
-          variables?: Json
-        }
-        Returns: Json
-      }
-    }
-    Enums: {
-      [_ in never]: never
-    }
-    CompositeTypes: {
-      [_ in never]: never
-    }
-  }
   public: {
     Tables: {
       alert_rules: {
@@ -150,6 +125,7 @@ export type Database = {
           last_communication_at: string | null
           model: string | null
           protocol: Database["public"]["Enums"]["device_protocol"]
+          serial_number: string | null
           tenant_id: string
           updated_at: string
         }
@@ -161,6 +137,7 @@ export type Database = {
           last_communication_at?: string | null
           model?: string | null
           protocol?: Database["public"]["Enums"]["device_protocol"]
+          serial_number?: string | null
           tenant_id: string
           updated_at?: string
         }
@@ -172,6 +149,7 @@ export type Database = {
           last_communication_at?: string | null
           model?: string | null
           protocol?: Database["public"]["Enums"]["device_protocol"]
+          serial_number?: string | null
           tenant_id?: string
           updated_at?: string
         }
@@ -222,6 +200,47 @@ export type Database = {
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pending_devices: {
+        Row: {
+          first_seen_at: string
+          id: string
+          ip_address: string | null
+          last_seen_at: string
+          linked_device_id: string | null
+          message_count: number
+          protocol: Database["public"]["Enums"]["device_protocol"]
+          serial: string
+        }
+        Insert: {
+          first_seen_at?: string
+          id?: string
+          ip_address?: string | null
+          last_seen_at?: string
+          linked_device_id?: string | null
+          message_count?: number
+          protocol?: Database["public"]["Enums"]["device_protocol"]
+          serial: string
+        }
+        Update: {
+          first_seen_at?: string
+          id?: string
+          ip_address?: string | null
+          last_seen_at?: string
+          linked_device_id?: string | null
+          message_count?: number
+          protocol?: Database["public"]["Enums"]["device_protocol"]
+          serial?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pending_devices_linked_device_id_fkey"
+            columns: ["linked_device_id"]
+            isOneToOne: false
+            referencedRelation: "devices"
             referencedColumns: ["id"]
           },
         ]
@@ -1600,9 +1619,6 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
-  graphql_public: {
-    Enums: {},
-  },
   public: {
     Enums: {
       alert_severity: ["info", "warning", "critical"],

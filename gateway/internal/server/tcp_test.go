@@ -17,10 +17,6 @@ func (m *mockHandler) HandlePosition(pos *protocol.Position) {
 	m.positions = append(m.positions, pos)
 }
 
-func (m *mockHandler) IsRegistered(imei string) bool {
-	return imei == "123456789012345"
-}
-
 func TestTCPServer_AcceptsConnection(t *testing.T) {
 	handler := &mockHandler{}
 	registry := protocol.NewRegistry(protocol.NewSuntechParser())
@@ -59,7 +55,7 @@ func TestTCPServer_AcceptsConnection(t *testing.T) {
 	}
 }
 
-func TestTCPServer_RejectsUnknownDevice(t *testing.T) {
+func TestTCPServer_PassesAllPositions(t *testing.T) {
 	handler := &mockHandler{}
 	registry := protocol.NewRegistry(protocol.NewSuntechParser())
 
@@ -83,8 +79,8 @@ func TestTCPServer_RejectsUnknownDevice(t *testing.T) {
 	conn.Write([]byte(msg))
 	time.Sleep(200 * time.Millisecond)
 
-	if len(handler.positions) != 0 {
-		t.Errorf("expected 0 positions for unknown device, got %d", len(handler.positions))
+	if len(handler.positions) != 1 {
+		t.Errorf("expected 1 position (all pass through), got %d", len(handler.positions))
 	}
 }
 
