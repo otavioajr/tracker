@@ -11,6 +11,7 @@ export type VehiclePosition = {
   heading: number;
   ignition: boolean;
   device_time: string;
+  server_time: string;
   plate?: string;
 };
 
@@ -36,9 +37,9 @@ export async function getLatestPositions(): Promise<VehiclePosition[]> {
     devices.map(async (device) => {
       const { data: pos } = await supabase
         .from("positions")
-        .select("device_id, location, speed, heading, ignition, device_time")
+        .select("device_id, location, speed, heading, ignition, device_time, server_time")
         .eq("device_id", device.id)
-        .order("device_time", { ascending: false })
+        .order("server_time", { ascending: false })
         .limit(1)
         .single();
 
@@ -62,6 +63,7 @@ export async function getLatestPositions(): Promise<VehiclePosition[]> {
         heading: pos.heading ?? 0,
         ignition: pos.ignition ?? false,
         device_time: pos.device_time,
+        server_time: pos.server_time,
         plate: plate ?? undefined,
       });
     })

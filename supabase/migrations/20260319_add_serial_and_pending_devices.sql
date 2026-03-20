@@ -29,6 +29,9 @@ CREATE POLICY "admin_manage_pending" ON pending_devices
 CREATE POLICY "client_delete_pending" ON pending_devices
   FOR DELETE USING (auth.uid() IS NOT NULL);
 
+-- Grant base table permissions (RLS only filters rows, not access)
+GRANT SELECT, DELETE ON pending_devices TO authenticated;
+
 -- Backfill: set serial_number for the existing ST310U device
 UPDATE devices SET serial_number = '007075134' WHERE imei = '007075134';
 -- Restore original IMEI from label

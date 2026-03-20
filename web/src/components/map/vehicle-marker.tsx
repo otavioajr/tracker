@@ -11,17 +11,18 @@ type VehiclePosition = {
   heading: number;
   ignition: boolean;
   device_time: string;
+  server_time: string;
   plate?: string;
 };
 
 function getMarkerColor(position: VehiclePosition): string {
-  const lastSeen = new Date(position.device_time);
+  const lastSeen = new Date(position.server_time);
   const minutesAgo = (Date.now() - lastSeen.getTime()) / 1000 / 60;
 
   if (minutesAgo > 30) return "#ef4444"; // red — no signal
   if (position.ignition && position.speed > 2) return "#22c55e"; // green — moving
   if (position.ignition) return "#eab308"; // yellow — ignition on but stopped
-  return "#ef4444"; // red — ignition off / no signal
+  return "#6b7280"; // gray — ignition off
 }
 
 function createVehicleIcon(color: string): L.DivIcon {
@@ -73,7 +74,7 @@ export function VehicleMarker({ position }: { position: VehiclePosition }) {
               {position.ignition ? "Ligada" : "Desligada"}
             </span>
             <span style={{ color: "#6b7280" }}>Atualizado:</span>
-            <span>{formatTimestamp(position.device_time)}</span>
+            <span>{formatTimestamp(position.server_time)}</span>
           </div>
         </div>
       </Popup>

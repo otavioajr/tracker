@@ -1,9 +1,13 @@
 import { getVehicles } from "@/lib/actions/vehicles";
+import { getDevices } from "@/lib/actions/devices";
 import { VehicleTable } from "@/components/vehicles/vehicle-table";
 import { VehicleDialog } from "@/components/vehicles/vehicle-dialog";
 
 export default async function VehiclesPage() {
-  const vehicles = await getVehicles();
+  const [vehicles, devices] = await Promise.all([
+    getVehicles(),
+    getDevices(),
+  ]);
 
   return (
     <div className="space-y-6">
@@ -11,7 +15,14 @@ export default async function VehiclesPage() {
         <h1 className="text-2xl font-bold">Veiculos</h1>
         <VehicleDialog />
       </div>
-      <VehicleTable vehicles={vehicles} />
+      <VehicleTable
+        vehicles={vehicles}
+        availableDevices={devices.map((d) => ({
+          id: d.id,
+          imei: d.imei,
+          model: d.model,
+        }))}
+      />
     </div>
   );
 }

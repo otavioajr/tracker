@@ -38,6 +38,7 @@ export function useRealtimePositions(
             heading: number | null;
             ignition: boolean | null;
             device_time: string;
+            server_time: string;
           };
 
           const location = row.location as GeoJsonPoint;
@@ -56,6 +57,7 @@ export function useRealtimePositions(
               heading: row.heading ?? 0,
               ignition: row.ignition ?? false,
               device_time: row.device_time,
+              server_time: row.server_time,
               plate: existing?.plate,
             });
             return next;

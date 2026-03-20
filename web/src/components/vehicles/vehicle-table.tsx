@@ -4,9 +4,16 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { VehicleDialog } from "./vehicle-dialog";
-import { deleteVehicle } from "@/lib/actions/vehicles";
-import { Trash2, Cpu } from "lucide-react";
+import { deleteVehicle, associateDevice } from "@/lib/actions/vehicles";
+import { Trash2, Cpu, Link2, Unlink } from "lucide-react";
 import { useState } from "react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 
 type Vehicle = {
   id: string;
@@ -20,8 +27,21 @@ type Vehicle = {
   devices: { imei: string; protocol: string; last_communication_at: string | null } | null;
 };
 
-export function VehicleTable({ vehicles }: { vehicles: Vehicle[] }) {
+type AvailableDevice = {
+  id: string;
+  imei: string;
+  model: string | null;
+};
+
+export function VehicleTable({
+  vehicles,
+  availableDevices,
+}: {
+  vehicles: Vehicle[];
+  availableDevices: AvailableDevice[];
+}) {
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [linking, setLinking] = useState<string | null>(null);
 
   async function handleDelete(id: string) {
     if (!confirm("Tem certeza que deseja excluir este veiculo?")) return;
@@ -29,6 +49,23 @@ export function VehicleTable({ vehicles }: { vehicles: Vehicle[] }) {
     await deleteVehicle(id);
     setDeleting(null);
   }
+
+  async function handleLink(vehicleId: string, deviceId: string) {
+    setLinking(vehicleId);
+    await associateDevice(vehicleId, deviceId);
+    setLinking(null);
+  }
+
+  async function handleUnlink(vehicleId: string) {
+    if (!confirm("Desvincular o dispositivo deste veículo?")) return;
+    setLinking(vehicleId);
+    await associateDevice(vehicleId, null);
+    setLinking(null);
+  }
+
+  // Devices not currently assigned to any vehicle
+  const assignedDeviceIds = new Set(vehicles.filter((v) => v.device_id).map((v) => v.device_id));
+  const unassignedDevices = availableDevices.filter((d) => !assignedDeviceIds.has(d.id));
 
   return (
     <Table>
@@ -39,7 +76,7 @@ export function VehicleTable({ vehicles }: { vehicles: Vehicle[] }) {
           <TableHead>Ano</TableHead>
           <TableHead>Cor</TableHead>
           <TableHead>Dispositivo</TableHead>
-          <TableHead className="w-24">Acoes</TableHead>
+          <TableHead className="w-32">Acoes</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -58,11 +95,59 @@ export function VehicleTable({ vehicles }: { vehicles: Vehicle[] }) {
             <TableCell>{v.color ?? "—"}</TableCell>
             <TableCell>
               {v.devices ? (
-                <Badge variant="outline" className="gap-1">
-                  <Cpu size={12} /> {v.devices.imei}
-                </Badge>
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline" className="gap-1">
+                    <Cpu size={12} /> {v.devices.imei}
+                  </Badge>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleUnlink(v.id)}
+                    disabled={linking === v.id}
+                    title="Desvincular dispositivo"
+                  >
+                    <Unlink size={14} className="text-muted-foreground" />
+                  </Button>
+                </div>
               ) : (
-                <span className="text-muted-foreground text-sm">Sem dispositivo</span>
+                <Dialog>
+                  <DialogTrigger
+                    render={
+                      <Button variant="outline" size="sm" disabled={linking === v.id} />
+                    }
+                  >
+                    <Link2 size={14} className="mr-1" /> Vincular dispositivo
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Vincular dispositivo ao veículo {v.plate}</DialogTitle>
+                    </DialogHeader>
+                    <p className="text-sm text-muted-foreground">
+                      Selecione o dispositivo para associar a este veículo:
+                    </p>
+                    <div className="space-y-2 max-h-64 overflow-y-auto">
+                      {unassignedDevices.length === 0 ? (
+                        <p className="text-sm text-muted-foreground py-4 text-center">
+                          Todos os dispositivos já estão vinculados a veículos.
+                        </p>
+                      ) : (
+                        unassignedDevices.map((d) => (
+                          <Button
+                            key={d.id}
+                            variant="outline"
+                            className="w-full justify-start"
+                            onClick={() => handleLink(v.id, d.id)}
+                          >
+                            <span className="font-mono">{d.imei}</span>
+                            {d.model && (
+                              <span className="ml-2 text-muted-foreground">({d.model})</span>
+                            )}
+                          </Button>
+                        ))
+                      )}
+                    </div>
+                  </DialogContent>
+                </Dialog>
               )}
             </TableCell>
             <TableCell>
