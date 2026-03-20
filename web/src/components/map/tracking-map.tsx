@@ -11,6 +11,7 @@ type VehiclePosition = {
   heading: number;
   ignition: boolean;
   device_time: string;
+  server_time: string;
   plate?: string;
 };
 

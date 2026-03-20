@@ -81,7 +81,7 @@ export async function getPositionHistory(
 
   const { data, error } = await supabase
     .from("positions")
-    .select("device_id, vehicle_id, location, speed, heading, ignition, device_time")
+    .select("device_id, vehicle_id, location, speed, heading, ignition, device_time, server_time")
     .eq("vehicle_id", vehicleId)
     .gte("device_time", startDate)
     .lte("device_time", endDate)
@@ -107,6 +107,7 @@ export async function getPositionHistory(
       heading: pos.heading ?? 0,
       ignition: pos.ignition ?? false,
       device_time: pos.device_time,
+      server_time: pos.server_time,
     });
   }
 
