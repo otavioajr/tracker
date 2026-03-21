@@ -13,6 +13,8 @@ type VehiclePosition = {
   device_time: string;
   server_time: string;
   plate?: string;
+  vehicle_name?: string;
+  vehicle_model?: string;
 };
 
 function getMarkerColor(position: VehiclePosition): string {
@@ -63,9 +65,16 @@ export function VehicleMarker({ position }: { position: VehiclePosition }) {
     >
       <Popup>
         <div style={{ minWidth: 160, fontFamily: "sans-serif", fontSize: 13 }}>
-          <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 6 }}>
-            {position.plate ?? position.device_id}
+          <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 2 }}>
+            {position.vehicle_name
+              ? `${position.vehicle_name} - ${position.plate ?? position.device_id}`
+              : position.plate ?? position.device_id}
           </div>
+          {position.vehicle_model && (
+            <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 6 }}>
+              {position.vehicle_model}
+            </div>
+          )}
           <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "2px 8px" }}>
             <span style={{ color: "#6b7280" }}>Velocidade:</span>
             <span>{position.speed.toFixed(0)} km/h</span>

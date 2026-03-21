@@ -21,6 +21,7 @@ export async function createVehicle(formData: FormData) {
 
   const { error } = await supabase.from("vehicles").insert({
     tenant_id: tenantId,
+    name: formData.get("name") as string || null,
     plate: formData.get("plate") as string,
     brand: formData.get("brand") as string || null,
     model: formData.get("model") as string || null,
@@ -40,6 +41,7 @@ export async function updateVehicle(id: string, formData: FormData) {
   const { error } = await supabase
     .from("vehicles")
     .update({
+      name: formData.get("name") as string || null,
       plate: formData.get("plate") as string,
       brand: formData.get("brand") as string || null,
       model: formData.get("model") as string || null,

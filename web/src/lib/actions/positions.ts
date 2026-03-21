@@ -13,6 +13,8 @@ export type VehiclePosition = {
   device_time: string;
   server_time: string;
   plate?: string;
+  vehicle_name?: string;
+  vehicle_model?: string;
 };
 
 type GeoJsonPoint = {
@@ -25,7 +27,7 @@ export async function getLatestPositions(): Promise<VehiclePosition[]> {
 
   const { data: devices, error: devicesError } = await supabase
     .from("devices")
-    .select("id, imei, vehicles(plate)")
+    .select("id, imei, vehicles(name, plate, brand, model)")
     .eq("active", true);
 
   if (devicesError) throw new Error(devicesError.message);
@@ -50,10 +52,8 @@ export async function getLatestPositions(): Promise<VehiclePosition[]> {
 
       const [longitude, latitude] = location.coordinates;
 
-      const vehicles = device.vehicles as { plate: string } | { plate: string }[] | null;
-      const plate = Array.isArray(vehicles)
-        ? vehicles[0]?.plate
-        : vehicles?.plate;
+      const vehicles = device.vehicles as { name: string | null; plate: string; brand: string | null; model: string | null } | { name: string | null; plate: string; brand: string | null; model: string | null }[] | null;
+      const vehicle = Array.isArray(vehicles) ? vehicles[0] : vehicles;
 
       positions.push({
         device_id: pos.device_id,
@@ -64,7 +64,9 @@ export async function getLatestPositions(): Promise<VehiclePosition[]> {
         ignition: pos.ignition ?? false,
         device_time: pos.device_time,
         server_time: pos.server_time,
-        plate: plate ?? undefined,
+        plate: vehicle?.plate ?? undefined,
+        vehicle_name: vehicle?.name ?? undefined,
+        vehicle_model: vehicle ? [vehicle.brand, vehicle.model].filter(Boolean).join(" ") || undefined : undefined,
       });
     })
   );

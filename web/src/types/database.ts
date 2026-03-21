@@ -490,6 +490,7 @@ export type Database = {
           device_id: string | null
           id: string
           model: string | null
+          name: string | null
           plate: string
           tenant_id: string
           updated_at: string
@@ -503,6 +504,7 @@ export type Database = {
           device_id?: string | null
           id?: string
           model?: string | null
+          name?: string | null
           plate: string
           tenant_id: string
           updated_at?: string
@@ -516,6 +518,7 @@ export type Database = {
           device_id?: string | null
           id?: string
           model?: string | null
+          name?: string | null
           plate?: string
           tenant_id?: string
           updated_at?: string

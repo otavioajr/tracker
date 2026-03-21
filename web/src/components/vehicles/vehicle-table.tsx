@@ -17,6 +17,7 @@ import {
 
 type Vehicle = {
   id: string;
+  name: string | null;
   plate: string;
   brand: string | null;
   model: string | null;
@@ -71,6 +72,7 @@ export function VehicleTable({
     <Table>
       <TableHeader>
         <TableRow>
+          <TableHead>Nome</TableHead>
           <TableHead>Placa</TableHead>
           <TableHead>Marca/Modelo</TableHead>
           <TableHead>Ano</TableHead>
@@ -82,13 +84,14 @@ export function VehicleTable({
       <TableBody>
         {vehicles.length === 0 && (
           <TableRow>
-            <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+            <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
               Nenhum veiculo cadastrado
             </TableCell>
           </TableRow>
         )}
         {vehicles.map((v) => (
           <TableRow key={v.id}>
+            <TableCell>{v.name ?? "—"}</TableCell>
             <TableCell className="font-medium">{v.plate}</TableCell>
             <TableCell>{[v.brand, v.model].filter(Boolean).join(" ") || "—"}</TableCell>
             <TableCell>{v.year ?? "—"}</TableCell>

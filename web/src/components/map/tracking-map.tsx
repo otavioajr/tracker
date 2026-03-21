@@ -13,6 +13,8 @@ type VehiclePosition = {
   device_time: string;
   server_time: string;
   plate?: string;
+  vehicle_name?: string;
+  vehicle_model?: string;
 };
 
 const SAO_PAULO: [number, number] = [-23.55, -46.63];

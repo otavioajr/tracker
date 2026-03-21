@@ -16,6 +16,7 @@ import { Plus, Pencil } from "lucide-react";
 
 type Vehicle = {
   id: string;
+  name: string | null;
   plate: string;
   brand: string | null;
   model: string | null;
@@ -58,6 +59,10 @@ export function VehicleDialog({ vehicle }: { vehicle?: Vehicle }) {
               {error}
             </div>
           )}
+          <div className="space-y-2">
+            <Label htmlFor="name">Nome / Apelido</Label>
+            <Input id="name" name="name" defaultValue={vehicle?.name ?? ""} placeholder="Ex: Carro do João" />
+          </div>
           <div className="space-y-2">
             <Label htmlFor="plate">Placa</Label>
             <Input id="plate" name="plate" required defaultValue={vehicle?.plate ?? ""} placeholder="ABC-1234" />
