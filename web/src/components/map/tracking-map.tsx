@@ -47,12 +47,28 @@ const VehicleMarkerDynamic = dynamic(
   { ssr: false }
 );
 
+const MapControllerDynamic = dynamic(
+  () => import("./map-controller").then((m) => m.MapController),
+  { ssr: false }
+);
+
 type TrackingMapProps = {
   positions: VehiclePosition[];
   className?: string;
+  followedDeviceId: string | null;
+  onFollow: (deviceId: string) => void;
+  onCancelFollow: () => void;
+  fitAllTrigger: number;
 };
 
-export function TrackingMap({ positions, className }: TrackingMapProps) {
+export function TrackingMap({
+  positions,
+  className,
+  followedDeviceId,
+  onFollow,
+  onCancelFollow,
+  fitAllTrigger,
+}: TrackingMapProps) {
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -117,8 +133,18 @@ export function TrackingMap({ positions, className }: TrackingMapProps) {
           />
         </LayersControlBaseLayer>
       </LayersControl>
+      <MapControllerDynamic
+        followedDeviceId={followedDeviceId}
+        positions={positions}
+        fitAllTrigger={fitAllTrigger}
+        onCancelFollow={onCancelFollow}
+      />
       {positions.map((pos) => (
-        <VehicleMarkerDynamic key={pos.device_id} position={pos} />
+        <VehicleMarkerDynamic
+          key={pos.device_id}
+          position={pos}
+          onFollow={onFollow}
+        />
       ))}
     </MapContainer>
   );
