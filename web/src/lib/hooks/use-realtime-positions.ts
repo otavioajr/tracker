@@ -22,13 +22,13 @@ export function useRealtimePositions(
     const supabase = supabaseRef.current;
 
     const channel = supabase
-      .channel("realtime:positions")
+      .channel("realtime:latest_positions")
       .on(
         "postgres_changes",
         {
-          event: "INSERT",
+          event: "*",
           schema: "public",
-          table: "positions",
+          table: "latest_positions",
         },
         (payload) => {
           const row = payload.new as {
@@ -59,6 +59,8 @@ export function useRealtimePositions(
               device_time: row.device_time,
               server_time: row.server_time,
               plate: existing?.plate,
+              vehicle_name: existing?.vehicle_name,
+              vehicle_model: existing?.vehicle_model,
             });
             return next;
           });
