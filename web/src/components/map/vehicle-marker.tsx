@@ -1,5 +1,6 @@
 "use client";
 
+import { useRef } from "react";
 import { Marker, Popup } from "react-leaflet";
 import L from "leaflet";
 
@@ -54,12 +55,20 @@ function formatTimestamp(isoString: string): string {
   }
 }
 
-export function VehicleMarker({ position }: { position: VehiclePosition }) {
+export function VehicleMarker({
+  position,
+  onFollow,
+}: {
+  position: VehiclePosition;
+  onFollow?: (deviceId: string) => void;
+}) {
+  const markerRef = useRef<L.Marker>(null);
   const color = getMarkerColor(position);
   const icon = createVehicleIcon(color);
 
   return (
     <Marker
+      ref={markerRef}
       position={[position.latitude, position.longitude]}
       icon={icon}
     >
@@ -85,6 +94,36 @@ export function VehicleMarker({ position }: { position: VehiclePosition }) {
             <span style={{ color: "#6b7280" }}>Atualizado:</span>
             <span>{formatTimestamp(position.server_time)}</span>
           </div>
+          {onFollow && (
+            <button
+              onClick={() => {
+                markerRef.current?.closePopup();
+                onFollow(position.device_id);
+              }}
+              style={{
+                marginTop: 8,
+                width: "100%",
+                padding: "7px 0",
+                background: "#3b82f6",
+                color: "white",
+                border: "none",
+                borderRadius: 6,
+                fontSize: 13,
+                fontWeight: 600,
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 6,
+              }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5">
+                <circle cx="12" cy="12" r="3" />
+                <path d="M12 2v4M12 18v4M2 12h4M18 12h4" />
+              </svg>
+              Seguir veículo
+            </button>
+          )}
         </div>
       </Popup>
     </Marker>
