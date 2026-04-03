@@ -63,9 +63,9 @@ func TestSuntechBinaryParse(t *testing.T) {
 			t.Errorf("Satellites = %d, want 6", pos.Satellites)
 		}
 
-		// DateTime: day=24, month=12, year=23 → 2023-12-24
-		if pos.DeviceTime.Year() != 2023 || pos.DeviceTime.Month() != 12 || pos.DeviceTime.Day() != 24 {
-			t.Errorf("DeviceTime = %v, expected 2023-12-24", pos.DeviceTime)
+		// DateTime: year=24, month=12, day=23 → 2024-12-23
+		if pos.DeviceTime.Year() != 2024 || pos.DeviceTime.Month() != 12 || pos.DeviceTime.Day() != 23 {
+			t.Errorf("DeviceTime = %v, expected 2024-12-23", pos.DeviceTime)
 		}
 	})
 

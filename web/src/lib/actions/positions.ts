@@ -85,9 +85,9 @@ export async function getPositionHistory(
     .from("positions")
     .select("device_id, vehicle_id, location, speed, heading, ignition, device_time, server_time")
     .eq("vehicle_id", vehicleId)
-    .gte("device_time", startDate)
-    .lte("device_time", endDate)
-    .order("device_time", { ascending: true });
+    .gte("server_time", startDate)
+    .lte("server_time", endDate)
+    .order("server_time", { ascending: true });
 
   if (error) throw new Error(error.message);
   if (!data) return [];

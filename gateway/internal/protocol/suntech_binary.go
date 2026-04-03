@@ -68,10 +68,10 @@ func (p *SuntechBinaryParser) Parse(data []byte) (*Position, error) {
 		return nil, fmt.Errorf("suntech-binary: payload too short for position data (%d bytes)", len(payload))
 	}
 
-	// DateTime: 6 bytes at offset 9-14 (Day, Month, Year, Hour, Min, Sec)
-	day := int(payload[9])
+	// DateTime: 6 bytes at offset 9-14 (Year, Month, Day, Hour, Min, Sec)
+	year := 2000 + int(payload[9])
 	month := int(payload[10])
-	year := 2000 + int(payload[11])
+	day := int(payload[11])
 	hour := int(payload[12])
 	min := int(payload[13])
 	sec := int(payload[14])

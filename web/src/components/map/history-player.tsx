@@ -293,7 +293,7 @@ export function HistoryPlayer() {
             <div className="flex gap-6 text-sm text-muted-foreground bg-muted/40 rounded-md px-4 py-2">
               <span>
                 <span className="font-medium text-foreground">Hora:</span>{" "}
-                {new Date(currentPos.device_time).toLocaleString("pt-BR")}
+                {new Date(currentPos.server_time).toLocaleString("pt-BR")}
               </span>
               <span>
                 <span className="font-medium text-foreground">Velocidade:</span>{" "}
