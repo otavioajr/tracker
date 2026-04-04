@@ -13,7 +13,8 @@ let _historyIcon: any = null;
 function createHistoryIcon() {
   if (_historyIcon) return _historyIcon;
   // eslint-disable-next-line @typescript-eslint/no-require-imports -- lazy require: top-level leaflet import breaks SSR
-  const L = require("leaflet") as typeof import("leaflet").default;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const L = require("leaflet") as any;
   const color = "#22c55e";
   const svg = `
     <svg xmlns="http://www.w3.org/2000/svg" width="32" height="44" viewBox="0 0 32 44">
