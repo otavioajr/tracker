@@ -151,8 +151,8 @@ export function DashboardMap({ initialPositions }: DashboardMapProps) {
         </div>
       </div>
 
-      <div className="absolute inset-y-3 right-3 z-[1000] hidden items-start lg:flex">
-        {desktopRailOpen ? (
+      {desktopRailOpen ? (
+        <div className="absolute inset-y-3 right-3 z-[1000] hidden items-start lg:flex">
           <div className="flex h-full w-[22rem] flex-col overflow-hidden rounded-[28px] border border-white/10 bg-background/88 p-4 text-foreground shadow-[0_24px_48px_-24px_rgba(0,0,0,0.75)] backdrop-blur-2xl">
             <div className="mb-4 flex items-start justify-between gap-3">
               <div>
@@ -184,7 +184,9 @@ export function DashboardMap({ initialPositions }: DashboardMapProps) {
               onSelectVehicle={handleSelectVehicle}
             />
           </div>
-        ) : (
+        </div>
+      ) : (
+        <div className="absolute top-1/2 right-3 z-[1000] hidden -translate-y-1/2 lg:flex">
           <Button
             type="button"
             size="icon-lg"
@@ -195,8 +197,8 @@ export function DashboardMap({ initialPositions }: DashboardMapProps) {
           >
             <MapPinned />
           </Button>
-        )}
-      </div>
+        </div>
+      )}
 
       <DashboardMobileSheet
         state={mobileSheetState}
