@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import "leaflet/dist/leaflet.css";
 import dynamic from "next/dynamic";
 
 type VehiclePosition = {
@@ -69,42 +69,16 @@ export function TrackingMap({
   onCancelFollow,
   fitAllTrigger,
 }: TrackingMapProps) {
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
   const center: [number, number] =
     positions.length > 0
       ? [positions[0].latitude, positions[0].longitude]
       : SAO_PAULO;
 
-  if (!mounted) {
-    return (
-      <div
-        className={className}
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          background: "#f3f4f6",
-          borderRadius: 8,
-          minHeight: 400,
-          color: "#6b7280",
-          fontSize: 14,
-        }}
-      >
-        Carregando mapa...
-      </div>
-    );
-  }
-
   return (
     <MapContainer
       center={center}
       zoom={12}
-      style={{ width: "100%", minHeight: 400, borderRadius: 8 }}
+      style={{ width: "100%", height: "100%", minHeight: 400 }}
       className={className}
     >
       <LayersControl position="topright">

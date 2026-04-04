@@ -23,11 +23,11 @@ export function Sidebar() {
   return (
     <aside
       className={cn(
-        "flex flex-col border-r bg-card transition-all duration-200",
+        "hidden lg:flex flex-col border-r border-border/50 bg-card/50 backdrop-blur-xl transition-all duration-200",
         collapsed ? "w-16" : "w-56"
       )}
     >
-      <div className="flex items-center justify-between h-14 px-4 border-b">
+      <div className="flex items-center justify-between h-14 px-4 border-b border-border/50">
         {!collapsed && <span className="font-bold text-lg">Tracker</span>}
         <button
           onClick={() => setCollapsed(!collapsed)}

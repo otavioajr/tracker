@@ -1,9 +1,21 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { TrackingMap } from "@/components/map/tracking-map";
+import dynamic from "next/dynamic";
 import { useRealtimePositions } from "@/lib/hooks/use-realtime-positions";
 import type { VehiclePosition } from "@/lib/actions/positions";
+
+const TrackingMap = dynamic(
+  () => import("@/components/map/tracking-map").then((mod) => mod.TrackingMap),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex h-full w-full items-center justify-center rounded-lg bg-card text-sm text-muted-foreground">
+        Carregando mapa...
+      </div>
+    ),
+  }
+);
 
 type DashboardMapProps = {
   initialPositions: VehiclePosition[];
@@ -41,103 +53,54 @@ export function DashboardMap({ initialPositions }: DashboardMapProps) {
         onCancelFollow={handleCancelFollow}
         fitAllTrigger={fitAllTrigger}
       />
+
+      {/* Following indicator */}
       {followedVehicle && (
-        <div
-          style={{
-            position: "absolute",
-            top: 12,
-            left: "50%",
-            transform: "translateX(-50%)",
-            zIndex: 1000,
-            background: "#2563eb",
-            color: "white",
-            borderRadius: 20,
-            padding: "8px 20px",
-            boxShadow: "0 2px 12px rgba(37,99,235,0.35)",
-            fontSize: 14,
-            fontWeight: 600,
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-            pointerEvents: "none",
-            whiteSpace: "nowrap",
-          }}
-        >
-          <span
-            style={{
-              width: 8,
-              height: 8,
-              background: "#60a5fa",
-              borderRadius: "50%",
-              display: "inline-block",
-            }}
-          />
-          Seguindo: {followedVehicle.vehicle_name || followedVehicle.plate || followedVehicle.device_id} — {followedVehicle.speed.toFixed(0)} km/h
+        <div className="absolute top-3 left-1/2 -translate-x-1/2 z-[1000] pointer-events-none">
+          <div className="flex items-center gap-2 bg-primary text-primary-foreground rounded-full px-4 py-2 shadow-lg glow-primary text-xs sm:text-sm font-semibold whitespace-nowrap">
+            <span className="w-2 h-2 bg-primary-foreground/40 rounded-full animate-pulse" />
+            Seguindo:{" "}
+            {followedVehicle.vehicle_name ||
+              followedVehicle.plate ||
+              followedVehicle.device_id}{" "}
+            — {followedVehicle.speed.toFixed(0)} km/h
+          </div>
         </div>
       )}
+
+      {/* Drag hint */}
       {followedDeviceId && (
-        <div
-          style={{
-            position: "absolute",
-            bottom: 48,
-            left: "50%",
-            transform: "translateX(-50%)",
-            zIndex: 1000,
-            background: "rgba(0,0,0,0.6)",
-            color: "white",
-            borderRadius: 8,
-            padding: "4px 14px",
-            fontSize: 12,
-            pointerEvents: "none",
-            whiteSpace: "nowrap",
-          }}
-        >
-          Arraste o mapa para sair do modo follow
+        <div className="absolute bottom-28 lg:bottom-14 left-1/2 -translate-x-1/2 z-[1000] pointer-events-none">
+          <div className="bg-black/60 text-white rounded-lg px-3 py-1.5 text-xs whitespace-nowrap backdrop-blur-sm">
+            Arraste o mapa para sair do modo follow
+          </div>
         </div>
       )}
+
+      {/* Fit all button */}
       <button
         onClick={handleFitAll}
-        style={{
-          position: "absolute",
-          bottom: 12,
-          right: 12,
-          zIndex: 1000,
-          background: "white",
-          border: "1px solid #d1d5db",
-          borderRadius: 8,
-          padding: "8px 16px",
-          boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
-          fontSize: 13,
-          fontWeight: 600,
-          color: "#374151",
-          cursor: "pointer",
-          display: "flex",
-          alignItems: "center",
-          gap: 6,
-        }}
+        className="absolute bottom-24 lg:bottom-4 right-3 z-[1000] flex items-center gap-2 bg-card/90 hover:bg-accent border border-border/50 rounded-xl px-4 py-2.5 shadow-lg text-xs font-semibold text-foreground backdrop-blur-sm transition-all active:scale-95"
       >
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <svg
+          width="14"
+          height="14"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.5"
+        >
           <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" />
         </svg>
         Ver todos
       </button>
-      <div
-        style={{
-          position: "absolute",
-          bottom: 12,
-          left: 12,
-          zIndex: 1000,
-          background: "white",
-          borderRadius: 8,
-          padding: "6px 14px",
-          boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
-          fontSize: 13,
-          fontWeight: 600,
-          color: "#374151",
-          pointerEvents: "none",
-        }}
-      >
-        {positions.length} {positions.length === 1 ? "veículo" : "veículos"} ativos
+
+      {/* Vehicle count */}
+      <div className="absolute bottom-24 lg:bottom-4 left-3 z-[1000] pointer-events-none">
+        <div className="bg-card/90 border border-border/50 rounded-xl px-3 py-2 shadow-lg text-xs font-semibold text-foreground backdrop-blur-sm">
+          <span className="text-primary font-bold">{positions.length}</span>{" "}
+          {positions.length === 1 ? "veículo" : "veículos"}
+        </div>
       </div>
     </div>
   );

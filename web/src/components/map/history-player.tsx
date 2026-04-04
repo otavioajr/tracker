@@ -1,20 +1,22 @@
 "use client";
 
+import "leaflet/dist/leaflet.css";
 import { useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
+import type { DivIcon } from "leaflet";
 import { getVehicles } from "@/lib/actions/vehicles";
 import { getPositionHistory, VehiclePosition } from "@/lib/actions/positions";
 
 const SAO_PAULO: [number, number] = [-23.55, -46.63];
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-let _historyIcon: any = null;
+let cachedHistoryIcon: DivIcon | null = null;
+let historyIconPromise: Promise<DivIcon> | null = null;
 
-function createHistoryIcon() {
-  if (_historyIcon) return _historyIcon;
-  // eslint-disable-next-line @typescript-eslint/no-require-imports -- lazy require: top-level leaflet import breaks SSR
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const L = require("leaflet") as any;
+async function loadHistoryIcon(): Promise<DivIcon> {
+  if (cachedHistoryIcon) return cachedHistoryIcon;
+  if (historyIconPromise) return historyIconPromise;
+
+  historyIconPromise = import("leaflet").then((L) => {
   const color = "#22c55e";
   const svg = `
     <svg xmlns="http://www.w3.org/2000/svg" width="32" height="44" viewBox="0 0 32 44">
@@ -26,14 +28,17 @@ function createHistoryIcon() {
     </svg>
   `;
 
-  _historyIcon = L.divIcon({
+    cachedHistoryIcon = L.divIcon({
     html: svg,
     className: "",
     iconSize: [32, 44],
     iconAnchor: [16, 42],
     popupAnchor: [0, -34],
   });
-  return _historyIcon;
+    return cachedHistoryIcon;
+  });
+
+  return historyIconPromise;
 }
 
 const MapContainer = dynamic(
@@ -81,6 +86,7 @@ type Vehicle = {
 
 export function HistoryPlayer() {
   const [mounted, setMounted] = useState(false);
+  const [historyIcon, setHistoryIcon] = useState<DivIcon | null>(null);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [vehicleId, setVehicleId] = useState("");
   const [startDate, setStartDate] = useState("");
@@ -93,13 +99,34 @@ export function HistoryPlayer() {
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
+    let isActive = true;
     setMounted(true);
+    loadHistoryIcon()
+      .then((icon) => {
+        if (isActive) {
+          setHistoryIcon(icon);
+        }
+      })
+      .catch(() => {
+        if (isActive) {
+          setError("Erro ao carregar mapa");
+        }
+      });
     getVehicles()
       .then((data) => {
+        if (!isActive) return;
         setVehicles((data as Vehicle[]) ?? []);
         if (data && data.length > 0) setVehicleId(data[0].id);
       })
-      .catch(() => setError("Erro ao carregar veiculos"));
+      .catch(() => {
+        if (isActive) {
+          setError("Erro ao carregar veiculos");
+        }
+      });
+
+    return () => {
+      isActive = false;
+    };
   }, []);
 
   useEffect(() => {
@@ -278,10 +305,10 @@ export function HistoryPlayer() {
             {routeCoords.length > 1 && (
               <Polyline positions={routeCoords} color="#3b82f6" weight={3} />
             )}
-            {currentPos && (
+            {currentPos && historyIcon && (
               <MarkerDynamic
                 position={[currentPos.latitude, currentPos.longitude]}
-                icon={createHistoryIcon()}
+                icon={historyIcon}
               />
             )}
           </MapContainer>

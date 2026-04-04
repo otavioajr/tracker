@@ -6,7 +6,7 @@ export default async function AlertsPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold">Alertas</h1>
+      <h1 className="text-xl lg:text-2xl font-bold">Alertas</h1>
       <AlertFeed alerts={alerts} />
     </div>
   );

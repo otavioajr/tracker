@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useEffectEvent, useRef } from "react";
 import { useMap } from "react-leaflet";
 import L from "leaflet";
 
@@ -36,12 +36,11 @@ export function MapController({
 }: MapControllerProps) {
   const map = useMap();
   const prevFollowedId = useRef<string | null>(null);
-  const onCancelFollowRef = useRef(onCancelFollow);
-  onCancelFollowRef.current = onCancelFollow;
+  const handleCancelFollow = useEffectEvent(onCancelFollow);
 
   // Drag cancels follow
   useEffect(() => {
-    const handler = () => onCancelFollowRef.current();
+    const handler = () => handleCancelFollow();
     map.on("dragstart", handler);
     return () => {
       map.off("dragstart", handler);

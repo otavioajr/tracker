@@ -10,9 +10,9 @@ export default async function VehiclesPage() {
   ]);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 lg:space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Veiculos</h1>
+        <h1 className="text-xl lg:text-2xl font-bold">Veículos</h1>
         <VehicleDialog />
       </div>
       <VehicleTable
