@@ -14,7 +14,10 @@ export function HistoryMapController({
   const isFirstView = useRef(true);
 
   useEffect(() => {
-    if (!center) return;
+    if (!center) {
+      isFirstView.current = true;
+      return;
+    }
 
     if (isFirstView.current) {
       map.setView(center, INITIAL_ZOOM, { animate: false });
@@ -24,13 +27,6 @@ export function HistoryMapController({
 
     map.setView(center, map.getZoom(), { animate: true });
   }, [center, map]);
-
-  // Reset first-view flag when center becomes null (new search)
-  useEffect(() => {
-    if (!center) {
-      isFirstView.current = true;
-    }
-  }, [center]);
 
   return null;
 }
