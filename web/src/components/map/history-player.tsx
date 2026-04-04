@@ -68,6 +68,11 @@ const LayersControlBaseLayer = dynamic(
   { ssr: false }
 );
 
+const HistoryMapControllerDynamic = dynamic(
+  () => import("./history-map-controller").then((m) => m.HistoryMapController),
+  { ssr: false }
+);
+
 type Vehicle = {
   id: string;
   plate: string;
@@ -159,13 +164,6 @@ export function HistoryPlayer() {
     .slice(0, currentIndex + 1)
     .map((p) => [p.latitude, p.longitude]);
 
-  const mapCenter: [number, number] =
-    currentPos
-      ? [currentPos.latitude, currentPos.longitude]
-      : positions.length > 0
-      ? [positions[0].latitude, positions[0].longitude]
-      : SAO_PAULO;
-
   return (
     <div className="flex flex-col gap-4 h-full">
       {/* Controls */}
@@ -243,8 +241,7 @@ export function HistoryPlayer() {
           </div>
         ) : (
           <MapContainer
-            key={mapCenter.join(",")}
-            center={mapCenter}
+            center={SAO_PAULO}
             zoom={14}
             style={{ width: "100%", height: "100%", minHeight: 400 }}
           >
@@ -274,6 +271,9 @@ export function HistoryPlayer() {
                 />
               </LayersControlBaseLayer>
             </LayersControl>
+            <HistoryMapControllerDynamic
+              center={currentPos ? [currentPos.latitude, currentPos.longitude] : null}
+            />
             {routeCoords.length > 1 && (
               <Polyline positions={routeCoords} color="#3b82f6" weight={3} />
             )}
