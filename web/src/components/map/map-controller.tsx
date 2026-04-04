@@ -3,20 +3,7 @@
 import { useEffect, useEffectEvent, useRef } from "react";
 import { useMap } from "react-leaflet";
 import L from "leaflet";
-
-type VehiclePosition = {
-  device_id: string;
-  latitude: number;
-  longitude: number;
-  speed: number;
-  heading: number;
-  ignition: boolean;
-  device_time: string;
-  server_time: string;
-  plate?: string;
-  vehicle_name?: string;
-  vehicle_model?: string;
-};
+import type { VehiclePosition } from "./types";
 
 type MapControllerProps = {
   followedDeviceId: string | null;
@@ -38,7 +25,7 @@ export function MapController({
   const prevFollowedId = useRef<string | null>(null);
   const handleCancelFollow = useEffectEvent(onCancelFollow);
 
-  // Drag cancels follow
+  // Drag exits follow mode, but selection stays in the dashboard state.
   useEffect(() => {
     const handler = () => handleCancelFollow();
     map.on("dragstart", handler);

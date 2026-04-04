@@ -3,20 +3,7 @@
 import { useRef } from "react";
 import { Marker, Popup } from "react-leaflet";
 import L from "leaflet";
-
-type VehiclePosition = {
-  device_id: string;
-  latitude: number;
-  longitude: number;
-  speed: number;
-  heading: number;
-  ignition: boolean;
-  device_time: string;
-  server_time: string;
-  plate?: string;
-  vehicle_name?: string;
-  vehicle_model?: string;
-};
+import type { VehiclePosition } from "./types";
 
 function getMarkerColor(position: VehiclePosition): string {
   const lastSeen = new Date(position.server_time);
@@ -28,13 +15,20 @@ function getMarkerColor(position: VehiclePosition): string {
   return "#6b7280"; // gray — ignition off
 }
 
-function createVehicleIcon(color: string): L.DivIcon {
+function createVehicleIcon(color: string, selected: boolean): L.DivIcon {
   const svg = `
-    <svg xmlns="http://www.w3.org/2000/svg" width="32" height="44" viewBox="0 0 32 44">
+    <svg xmlns="http://www.w3.org/2000/svg" width="38" height="50" viewBox="0 0 38 50">
+      ${
+        selected
+          ? `<circle cx="19" cy="19" r="18" fill="rgba(19, 211, 146, 0.18)" stroke="rgba(19, 211, 146, 0.9)" stroke-width="1.5"/>`
+          : ""
+      }
+      <g transform="translate(3, 3)">
       <polygon points="10,30 22,30 16,42" fill="${color}" opacity="0.9"/>
       <circle cx="16" cy="16" r="14" fill="${color}" stroke="white" stroke-width="2" opacity="0.9"/>
       <g transform="translate(8, 8)" fill="white">
         <path d="M14 6H2C1.4 6 1 6.4 1 7v8c0 .6.4 1 1 1h1v1.5c0 .3.2.5.5.5h1c.3 0 .5-.2.5-.5V16h8v1.5c0 .3.2.5.5.5h1c.3 0 .5-.2.5-.5V16h1c.6 0 1-.4 1-1V7c0-.6-.4-1-1-1zM4 13.5c-.8 0-1.5-.7-1.5-1.5S3.2 10.5 4 10.5s1.5.7 1.5 1.5-.7 1.5-1.5 1.5zm8 0c-.8 0-1.5-.7-1.5-1.5s.7-1.5 1.5-1.5 1.5.7 1.5 1.5-.7 1.5-1.5 1.5zm2-5H2V8l1.5-1.5h9L14 8v.5z"/>
+      </g>
       </g>
     </svg>
   `;
@@ -42,8 +36,8 @@ function createVehicleIcon(color: string): L.DivIcon {
   return L.divIcon({
     html: svg,
     className: "",
-    iconSize: [32, 44],
-    iconAnchor: [16, 42],
+    iconSize: [38, 50],
+    iconAnchor: [19, 45],
     popupAnchor: [0, -34],
   });
 }
@@ -58,20 +52,31 @@ function formatTimestamp(isoString: string): string {
 
 export function VehicleMarker({
   position,
+  selected = false,
+  onSelect,
   onFollow,
 }: {
   position: VehiclePosition;
+  selected?: boolean;
+  onSelect?: (deviceId: string) => void;
   onFollow?: (deviceId: string) => void;
 }) {
   const markerRef = useRef<L.Marker>(null);
   const color = getMarkerColor(position);
-  const icon = createVehicleIcon(color);
+  const icon = createVehicleIcon(color, selected);
 
   return (
     <Marker
       ref={markerRef}
       position={[position.latitude, position.longitude]}
       icon={icon}
+      eventHandlers={
+        onSelect
+          ? {
+              click: () => onSelect(position.device_id),
+            }
+          : undefined
+      }
     >
       <Popup>
         <div style={{ minWidth: 160, fontFamily: "sans-serif", fontSize: 13 }}>
@@ -99,6 +104,7 @@ export function VehicleMarker({
             <button
               onClick={() => {
                 markerRef.current?.closePopup();
+                onSelect?.(position.device_id);
                 onFollow(position.device_id);
               }}
               style={{

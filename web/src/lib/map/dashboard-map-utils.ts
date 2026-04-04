@@ -1,15 +1,11 @@
+import type { VehicleOperationalStatus, VehiclePosition } from "@/components/map/types";
+
 export type DashboardVehicleFilter = "all" | "moving" | "stopped" | "offline";
 
-export type VehicleOperationalStatus = "moving" | "stopped" | "offline";
-
-type DashboardVehicleLike = {
-  device_id: string;
-  ignition: boolean;
-  speed: number;
-  server_time: string;
-  plate?: string;
-  vehicle_name?: string;
-};
+type DashboardVehicleLike = Pick<
+  VehiclePosition,
+  "device_id" | "ignition" | "speed" | "server_time" | "plate" | "vehicle_name"
+>;
 
 export const DASHBOARD_STATUS_META: Record<
   VehicleOperationalStatus,
