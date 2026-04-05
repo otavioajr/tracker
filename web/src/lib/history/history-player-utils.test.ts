@@ -130,7 +130,7 @@ describe("history-player-utils", () => {
     expect(summary.totalDurationMinutes).toBe(15);
     expect(summary.movingMinutes).toBe(10);
     expect(summary.stoppedMinutes).toBe(5);
-    expect(summary.totalDistanceKm).toBeGreaterThan(0);
+    expect(summary.totalDistanceKm).toBeCloseTo(0.1508466474, 6);
   });
 
   it("extracts stop highlights from stationary frames", () => {
