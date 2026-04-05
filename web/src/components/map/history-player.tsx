@@ -4,10 +4,10 @@ import "leaflet/dist/leaflet.css";
 import { useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import type { DivIcon } from "leaflet";
-import { HistoryMapSummaryStrip } from "@/components/map/history-map-summary-strip";
 import { HistoryMissionSidebar } from "@/components/map/history-mission-sidebar";
 import { HistoryPlaybackBar } from "@/components/map/history-playback-bar";
 import { HistoryQueryToolbar } from "@/components/map/history-query-toolbar";
+import { HistorySelectedPointCard } from "@/components/map/history-selected-point-card";
 import { getVehicles } from "@/lib/actions/vehicles";
 import { getPositionHistory, VehiclePosition } from "@/lib/actions/positions";
 import {
@@ -202,7 +202,7 @@ export function HistoryPlayer() {
 
         const vehicleOptions = ((data as Vehicle[]) ?? []).map((vehicle) => ({
           id: vehicle.id,
-          label: vehicle.name ? `${vehicle.name} · ${vehicle.plate}` : vehicle.plate,
+          label: vehicle.name ? `${vehicle.name} - ${vehicle.plate}` : vehicle.plate,
         }));
 
         setVehicles(vehicleOptions);
@@ -310,6 +310,19 @@ export function HistoryPlayer() {
           onStartDateChange={setStartDate}
           onEndDateChange={setEndDate}
           onSearch={handleSearch}
+        />
+
+        <HistoryPlaybackBar
+          playing={playing}
+          currentIndex={currentIndex}
+          totalPoints={orderedPositions.length}
+          speed={playbackSpeed}
+          currentTimestamp={currentPosition?.server_time ?? null}
+          onPlay={handlePlay}
+          onPause={handlePause}
+          onReset={handleReset}
+          onSeek={handleSeek}
+          onSpeedChange={setPlaybackSpeed}
         />
 
         <div className="relative min-h-[420px] overflow-hidden rounded-xl border bg-muted/20">
@@ -459,26 +472,17 @@ export function HistoryPlayer() {
           )}
         </div>
 
-        <HistoryMapSummaryStrip summary={summary} loading={loading} />
-
-        <HistoryPlaybackBar
-          playing={playing}
-          currentIndex={currentIndex}
-          totalPoints={orderedPositions.length}
-          speed={playbackSpeed}
-          currentTimestamp={currentPosition?.server_time ?? null}
-          onPlay={handlePlay}
-          onPause={handlePause}
-          onReset={handleReset}
-          onSeek={handleSeek}
-          onSpeedChange={setPlaybackSpeed}
+        <HistorySelectedPointCard
+          currentPosition={currentPosition}
+          loading={loading}
+          hasSearched={hasSearched}
+          searchFailed={searchFailed}
         />
       </div>
 
       <HistoryMissionSidebar
         summary={summary}
         highlights={highlights}
-        currentPosition={currentPosition}
         loading={loading}
         hasSearched={hasSearched}
         searchFailed={searchFailed}

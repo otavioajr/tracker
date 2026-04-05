@@ -2,7 +2,6 @@
 
 import type { ReactNode } from "react";
 
-import type { VehiclePosition } from "@/lib/actions/positions";
 import type {
   HistoryHighlight,
   HistorySummary,
@@ -21,7 +20,6 @@ import {
 type HistoryMissionSidebarProps = {
   summary: HistorySummary | null;
   highlights: HistoryHighlight[];
-  currentPosition: VehiclePosition | null;
   loading: boolean;
   hasSearched: boolean;
   searchFailed: boolean;
@@ -31,7 +29,6 @@ type HistoryMissionSidebarProps = {
 export function HistoryMissionSidebar({
   summary,
   highlights,
-  currentPosition,
   loading,
   hasSearched,
   searchFailed,
@@ -151,61 +148,6 @@ export function HistoryMissionSidebar({
           )}
         </CardContent>
       </Card>
-
-      <Card size="sm" className="bg-card/94">
-        <CardHeader className="border-b border-border/60 pb-3">
-          <CardTitle>Ponto selecionado</CardTitle>
-          <CardDescription>
-            Leitura instantânea do frame atual da reprodução.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {beforeSearch ? (
-            <SidebarMessage>
-              O ponto atual será exibido aqui durante a navegação do histórico.
-            </SidebarMessage>
-          ) : loading ? (
-            <CurrentPointLoadingState />
-          ) : searchFailed ? (
-            <SidebarMessage>
-              Nenhum ponto pôde ser carregado porque a busca falhou.
-            </SidebarMessage>
-          ) : noResults ? (
-            <SidebarMessage>Nenhum ponto disponível para inspeção.</SidebarMessage>
-          ) : currentPosition ? (
-            <dl className="space-y-3">
-              <InfoRow
-                label="Horário"
-                value={formatHistoryTimestamp(currentPosition.server_time)}
-              />
-              <InfoRow
-                label="Velocidade"
-                value={`${Math.round(currentPosition.speed)} km/h`}
-              />
-              <InfoRow
-                label="Ignição"
-                value={currentPosition.ignition ? "Ligada" : "Desligada"}
-              />
-              <InfoRow
-                label="Direção"
-                value={`${Math.round(currentPosition.heading)}°`}
-              />
-              <InfoRow
-                label="Latitude"
-                value={currentPosition.latitude.toFixed(5)}
-              />
-              <InfoRow
-                label="Longitude"
-                value={currentPosition.longitude.toFixed(5)}
-              />
-            </dl>
-          ) : (
-            <SidebarMessage>
-              Selecione um destaque ou mova a timeline para inspecionar um ponto.
-            </SidebarMessage>
-          )}
-        </CardContent>
-      </Card>
     </aside>
   );
 }
@@ -219,15 +161,6 @@ function MetricTile({ label, value }: { label: string; value: string }) {
       <dd className="mt-1 text-lg font-semibold tracking-tight text-foreground">
         {value}
       </dd>
-    </div>
-  );
-}
-
-function InfoRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex items-start justify-between gap-3 rounded-lg border border-border/50 bg-background/55 px-3 py-2">
-      <dt className="text-sm text-muted-foreground">{label}</dt>
-      <dd className="text-right text-sm font-medium text-foreground">{value}</dd>
     </div>
   );
 }
@@ -263,19 +196,6 @@ function ListLoadingState() {
         <div
           key={index}
           className="h-16 animate-pulse rounded-lg border border-border/60 bg-muted/50"
-        />
-      ))}
-    </div>
-  );
-}
-
-function CurrentPointLoadingState() {
-  return (
-    <div className="space-y-2">
-      {Array.from({ length: 5 }).map((_, index) => (
-        <div
-          key={index}
-          className="h-11 animate-pulse rounded-lg border border-border/60 bg-muted/50"
         />
       ))}
     </div>

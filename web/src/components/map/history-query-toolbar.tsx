@@ -38,6 +38,9 @@ export function HistoryQueryToolbar({
   onEndDateChange,
   onSearch,
 }: HistoryQueryToolbarProps) {
+  const selectedVehicleLabel =
+    vehicles.find((vehicle) => vehicle.id === vehicleId)?.label ?? "";
+
   return (
     <Card size="sm" className="gap-3 bg-card/95">
       <CardContent className="space-y-3">
@@ -52,7 +55,11 @@ export function HistoryQueryToolbar({
                 className="h-9 w-full rounded-lg bg-background"
                 disabled={loading || vehicles.length === 0}
               >
-                <SelectValue placeholder="Selecione um veículo" />
+                {selectedVehicleLabel ? (
+                  <SelectValue>{selectedVehicleLabel}</SelectValue>
+                ) : (
+                  <SelectValue placeholder="Selecione um veículo" />
+                )}
               </SelectTrigger>
               <SelectContent align="start">
                 {vehicles.map((vehicle) => (
