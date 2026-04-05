@@ -1,21 +1,9 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import type { VehiclePosition } from "@/components/map/types";
 
-export type VehiclePosition = {
-  device_id: string;
-  vehicle_id?: string;
-  latitude: number;
-  longitude: number;
-  speed: number;
-  heading: number;
-  ignition: boolean;
-  device_time: string;
-  server_time: string;
-  plate?: string;
-  vehicle_name?: string;
-  vehicle_model?: string;
-};
+export type { VehiclePosition } from "@/components/map/types";
 
 type GeoJsonPoint = {
   type: "Point";
