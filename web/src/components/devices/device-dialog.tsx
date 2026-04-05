@@ -88,7 +88,8 @@ export function DeviceDialog({ device }: { device?: Device }) {
               id="imei"
               name="imei"
               required
-              disabled={isEdit}
+              readOnly={isEdit}
+              className={isEdit ? "bg-input/50 text-muted-foreground" : undefined}
               defaultValue={device?.imei ?? ""}
               placeholder="000000000000000"
             />
