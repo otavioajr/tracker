@@ -28,6 +28,7 @@ Thumbs.db
 
 # Superpowers
 .superpowers/
+.worktrees/
 
 # Docker
 docker-compose.override.yml
