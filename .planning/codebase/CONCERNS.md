@@ -1,274 +1,183 @@
 # Codebase Concerns
 
-**Analysis Date:** 2026-04-04
+**Analysis Date:** 2026-04-05
 
 ## Tech Debt
 
-**Unbounded context.Background() in goroutines:**
-- Issue: Multiple `Flush()` and database operations use `context.Background()` instead of request/shutdown context, causing uncontrolled goroutines that may not gracefully shut down on timeout
-- Files: `gateway/cmd/gateway/main.go` (line 151, 166), `gateway/internal/storage/writer.go` (lines 117, 161, 183)
-- Impact: On shutdown or deployment restart, pending database writes may be abandoned; no timeout enforcement on database operations in background tasks
-- Fix approach: Thread shutdown context through `Enqueue()` and accept context in `Flush()`. Store context in gateway struct, pass to `HandlePosition()`, and timeout pending flushes during shutdown
+**Gateway flush buffer is write-only:**
+- Issue: Failed position batches are enqueued into `Buffer`, but the running gateway never drains or replays buffered positions back into PostgreSQL.
+- Files: `gateway/cmd/gateway/main.go`, `gateway/internal/storage/writer.go`, `gateway/internal/storage/buffer.go`
+- Impact: A database outage degrades into silent data backlog accumulation and eventual data loss once the in-memory ring reaches capacity.
+- Fix approach: Add a replay worker that drains `Buffer`, retries inserts with backoff, and exposes backlog metrics/alerts.
 
-**Silent JSON parsing in alert rule syncer:**
-- Issue: `json.Unmarshal()` error is discarded (line 87 in `gateway/internal/alerts/sync.go`); malformed rule config silently fails with empty map
-- Files: `gateway/internal/alerts/sync.go` (line 87)
-- Impact: Alert rules with invalid JSON will be silently skipped, causing rules to appear active in database but never trigger
-- Fix approach: Log parse errors and either skip the rule with warning or fail sync entirely
+**Partition management is manual and time-bound:**
+- Issue: The partitioned `positions` table is created with only two monthly partitions and no automation for future months or retention.
+- Files: `supabase/migrations/20260318104457_positions.sql`, `supabase/migrations/20260318110000_add_vehicle_id_to_positions.sql`
+- Impact: Ingestion remains operational only while `server_time` lands inside the hardcoded ranges, and long-term storage growth has no cleanup path.
+- Fix approach: Add a scheduled partition-management function/job and document retention rules close to the migrations.
 
-**Buffer disk spill has no file size limits:**
-- Issue: If database is unavailable for extended period, fallback file can grow unbounded (one-per-line append with no rotation)
-- Files: `gateway/internal/storage/buffer.go` (lines 87-102)
-- Impact: Disk space exhaustion possible under prolonged database outage; no monitoring of file size
-- Fix approach: Add max file size configuration, implement file rotation, add disk space monitoring/alerts
-
-**Ignored error in timezone-naive datetime conversion:**
-- Issue: History player converts browser datetime-local to ISO8601, but client timezone offset not preserved; users in non-UTC zones get wrong time range
-- Files: `web/src/components/map/history-player.tsx` (lines 134-137)
-- Impact: History searches shifted by timezone offset (e.g., São Paulo -3:00); user sees positions from wrong time period
-- Fix approach: Use `new Date().getTimezoneOffset()` to compute local offset and add to ISO string, or capture timezone in datetime-local input
-
-**No bounds checking on alert rule evaluation:**
-- Issue: Alert engine reads `rule.Config` with type assertions (`.Config["max_speed"].(float64)`) that silently fail if type wrong; also no validation that required config keys exist
-- Files: `gateway/internal/alerts/engine.go` (lines 75-77, 107-109)
-- Impact: Misconfigured rules (wrong type, missing field) silently produce false alerts or no alerts; no visibility into config errors
-- Fix approach: Add config validation when rules load, return alert only if validation passes, log config errors in sync
+**History playback is concentrated in one client component:**
+- Issue: Query state, data loading, playback control, route rendering, highlight selection, and empty/loading states all live in one file.
+- Files: `web/src/components/map/history-player.tsx`, `web/src/lib/history/history-player-utils.ts`
+- Impact: Small changes in history UX or query behavior carry high regression risk because one component owns most of the behavior.
+- Fix approach: Split query/loading, playback state, and map rendering into isolated hooks/components and keep `history-player.tsx` as composition.
 
 ## Known Bugs
 
-**Ignition alert triggers on every position:**
-- Symptoms: Ignition alert fires repeatedly while vehicle is moving with ignition on
-- Files: `gateway/internal/alerts/engine.go` (lines 92-104)
-- Trigger: Rule type "ignition" == true returns true for every position where ignition=true (no state tracking)
-- Workaround: Create rule only to alert on ignition state *change*, not continuous state
-- Fix approach: Add previous position state to engine, only trigger if ignition transitioned from false to true
+**Reports use different timezone handling than history playback:**
+- Symptoms: Reports receive raw `datetime-local` strings, while history playback explicitly converts the same input to ISO before querying.
+- Files: `web/src/app/(dashboard)/reports/page.tsx`, `web/src/lib/actions/reports.ts`, `web/src/components/map/history-player.tsx`
+- Trigger: Generate a report with local browser timestamps near timezone boundaries or compare report output against history playback for the same interval.
+- Workaround: Manually convert report date inputs to UTC before calling `getTripsReport()` or reuse the history conversion path.
 
-**Leaflet SSR workaround uses `require()` which breaks tree-shaking:**
-- Symptoms: Lazy require of "leaflet" in history-player breaks minification/dead code elimination; history-player adds 100KB+ to bundle
-- Files: `web/src/components/map/history-player.tsx` (lines 15-17)
-- Trigger: Dynamic import of react-leaflet already prevents SSR; lazy require() for leaflet icon not needed
-- Workaround: Accept larger bundle size; use `require()` only if dynamic import still renders during SSR
-- Fix approach: Remove lazy require, import leaflet at top (it's already loaded for dynamic MapContainer). Test SSR with simple import first.
+**`last_communication_at` stays stale:**
+- Symptoms: The device table can show `Nunca` or outdated timestamps even while fresh positions are being ingested.
+- Files: `gateway/internal/storage/writer.go`, `gateway/cmd/gateway/main.go`, `web/src/components/devices/device-table.tsx`
+- Trigger: Ingest positions normally and inspect the devices screen.
+- Workaround: Use `latest_positions.server_time`-based screens such as the dashboard and vehicle views as the fresher signal.
 
-**Timezone-aware position queries missing:**
-- Symptoms: Position history queries use `server_time` for filtering but UI displays `server_time` in user's browser timezone without conversion
-- Files: `web/src/lib/actions/positions.ts` (line 88-89)
-- Trigger: `server_time` is UTC, but history-player datetime-local is browser local; mismatch on page boundary at midnight
-- Workaround: None; users accept timezone shift
-- Fix approach: Convert datetime-local to UTC before query, or adjust history player to show UTC time
+**Geofence alert rules are stored but never evaluated:**
+- Symptoms: The schema and seed data allow `geofence` rules, but the engine ignores them and produces no alert.
+- Files: `gateway/internal/alerts/engine.go`, `gateway/internal/alerts/sync.go`, `supabase/migrations/20260318104529_geofences_and_alerts.sql`, `supabase/seed.sql`
+- Trigger: Create an active `geofence` rule or rely on the seeded geofence rule.
+- Workaround: Limit production rules to `speed`, `ignition`, and `battery` until geofence evaluation exists.
 
-**Promise.all() in getLatestPositions without error handling:**
-- Symptoms: If one device position fetch fails, entire dashboard breaks; no partial results returned
-- Files: `web/src/lib/actions/positions.ts` (lines 38-72)
-- Trigger: Single device with malformed location data causes Promise.all to reject
-- Workaround: None; reload page
-- Fix approach: Use `Promise.allSettled()` and filter failed results; log errors separately
-
-**Missing validation on tenant_id in registration:**
-- Symptoms: User can register with non-existent tenant_id; signup succeeds but user cannot query any data
-- Files: `web/src/lib/actions/auth.ts` (lines 31-33)
-- Trigger: Registration doesn't check if tenant_id exists before creating user
-- Workaround: User must be created manually with correct tenant_id, or re-registered
-- Fix approach: Query tenants table before signup, return error if not found
+**Alert conditions fire on every matching packet:**
+- Symptoms: Speed, ignition, and battery alerts are generated statelessly, so sustained rule matches produce repeated rows instead of edge-triggered events.
+- Files: `gateway/internal/alerts/engine.go`, `gateway/cmd/gateway/main.go`
+- Trigger: Keep a device above the speed threshold or with ignition on across multiple packets.
+- Workaround: Downstream consumers must deduplicate alerts by device/type/time window.
 
 ## Security Considerations
 
-**Service role key exposed in web/.env.local:**
-- Risk: If `.env.local` is accidentally committed or leaked, service role key can bypass all RLS policies and read/write any data as superuser
-- Files: `web/.env.local` (present), referenced in `web/src/lib/supabase/server.ts`
-- Current mitigation: `.env.local` in `.gitignore`; example file at `web/.env.local.example`
-- Recommendations: 
-  - Ensure CI/CD never logs env vars
-  - Rotate service role key immediately if committed
-  - Consider using Supabase's JWT token with custom claims instead of service role for admin operations
+**Public signup can join any active tenant by UUID:**
+- Risk: Registration accepts a free-form `tenant_id`, and signup stays enabled without confirmations or captcha.
+- Files: `web/src/components/auth/register-form.tsx`, `web/src/lib/actions/auth.ts`, `supabase/migrations/20260318104558_rls_policies.sql`, `supabase/config.toml`
+- Current mitigation: `public.handle_new_user()` checks that the tenant exists and is active.
+- Recommendations: Replace raw tenant UUID entry with invite tokens or admin-issued join links, enable email confirmation, and add captcha/rate limits.
 
-**RLS policies assume tenant_id in all rows:**
-- Risk: If INSERT query omits tenant_id, RLS allows it and row becomes visible to all tenants
-- Files: `supabase/migrations/20260318104558_rls_policies.sql` (lines 55-58, 66-69)
-- Current mitigation: RLS SELECT policies check tenant_id match; INSERT not explicitly restricted
-- Recommendations:
-  - Add explicit CHECK on tenant_id for INSERT policies: `WITH CHECK (tenant_id = get_user_tenant_id())`
-  - Test INSERT without tenant_id to verify rejection
+**Pending device data is visible across tenants:**
+- Risk: Any authenticated user can read all `pending_devices` rows, including serial numbers and source IPs for devices outside their tenant.
+- Files: `supabase/migrations/20260319_add_serial_and_pending_devices.sql`, `web/src/lib/actions/pending-devices.ts`, `web/src/components/devices/pending-devices-table.tsx`
+- Current mitigation: Write access is still limited, and rows do not carry tenant business data yet.
+- Recommendations: Restrict reads to platform admins or introduce a controlled triage flow that assigns ownership before exposure.
 
-**No authentication context in gateway TCP handler:**
-- Risk: TCP protocol (Suntech) has no built-in auth; IMEI/serial lookup is only validation. Attacker can send positions for any known device
-- Files: `gateway/cmd/gateway/main.go` (line 149), `gateway/internal/storage/writer.go` (line 102)
-- Current mitigation: Oracle server restricted to private network (port 5001)
-- Recommendations:
-  - Add allowlist of trusted IPs if deployed to shared network
-  - Implement device-specific token/secret in protocol negotiation
-  - Log all unregistered device attempts (already done for pending_devices)
-
-**Supabase anon key visible in client JS:**
-- Risk: `NEXT_PUBLIC_SUPABASE_ANON_KEY` is intentionally public but can be used by attacker to brute-force auth or bypass RLS if misconfigured
-- Files: `web/src/lib/supabase/client.ts`, `web/src/lib/supabase/server.ts`
-- Current mitigation: RLS policies enforce tenant isolation; anon key restricted to row-level access
-- Recommendations:
-  - Regularly audit RLS policies for overpermissive SELECT/INSERT
-  - Test RLS policies with SQL directly: `SET ROLE anon; SELECT * FROM devices` → should return 0 rows
+**Gateway and metrics endpoints are unauthenticated transport surfaces:**
+- Risk: The GPS TCP listener and JSON metrics server start without TLS, client authentication, or request filtering.
+- Files: `gateway/cmd/gateway/main.go`, `gateway/internal/server/tcp.go`, `gateway/internal/metrics/metrics.go`, `gateway/internal/config/config.go`
+- Current mitigation: Idle connection timeouts reduce some abuse surface.
+- Recommendations: Put both ports behind private networking or a proxy, add source allowlists where possible, and treat `METRICS_PORT` as internal-only.
 
 ## Performance Bottlenecks
 
-**Device cache never invalidates stale entries:**
-- Problem: If IMEI reassigned or device deleted, writer.devices cache still maps old IMEI → old DeviceInfo until restart
-- Files: `gateway/internal/storage/writer.go` (lines 67-99)
-- Cause: Reload happens on 30s interval but only appends; deleted devices remain cached
-- Improvement path: On reload, replace entire cache (already done in LoadDevices line 94). Verify reassignments tested.
+**Initial dashboard load bypasses `latest_positions`:**
+- Problem: `getLatestPositions()` fetches active devices first and then runs one latest-position query per device against `positions`.
+- Files: `web/src/lib/actions/positions.ts`, `web/src/app/(dashboard)/page.tsx`, `supabase/migrations/20260403_latest_positions_realtime.sql`
+- Cause: The realtime table exists for subscriptions, but the initial server render still uses an N+1 scan against the partitioned history table.
+- Improvement path: Read from `latest_positions` directly for initial hydration and join vehicle metadata in one query or view.
 
-**Position history query returns all columns then filters in JS:**
-- Problem: `getPositionHistory()` selects "location, speed, heading..." but fetches all rows, then loops to filter GeoJSON
-- Files: `web/src/lib/actions/positions.ts` (lines 84-114)
-- Cause: Should use `.filter((p) => p.location.type === 'Point')` on query, not in JS (though minor impact)
-- Improvement path: Move filter to Supabase query if supported, or accept current JS filter (typically <100 rows per query)
+**Vehicle listing has the same N+1 pattern:**
+- Problem: `getVehicles()` enriches each vehicle with a separate latest-position lookup.
+- Files: `web/src/lib/actions/vehicles.ts`, `web/src/app/(dashboard)/vehicles/page.tsx`, `web/src/components/vehicles/vehicle-table.tsx`
+- Cause: `Promise.all()` issues one `positions` query per vehicle.
+- Improvement path: Replace per-vehicle lookups with `latest_positions`, a view, or a single SQL query that returns vehicle status fields together.
 
-**Real-time subscription doesn't debounce rapid updates:**
-- Problem: If device sends 10 positions/sec, UI rerenders 10 times; no throttling on marker updates
-- Files: `web/src/lib/hooks/use-realtime-positions.ts` (lines 49-66)
-- Cause: Every Postgres change event triggers setState immediately
-- Improvement path: Add debounce(300ms) on setPositionsMap or use useTransition to batch updates
+**History and report generation load entire ranges into memory:**
+- Problem: Long date ranges pull all matching rows into the application and compute playback summaries or trip reports in TypeScript.
+- Files: `web/src/lib/actions/positions.ts`, `web/src/lib/actions/reports.ts`, `web/src/components/map/history-player.tsx`, `web/src/app/(dashboard)/reports/page.tsx`
+- Cause: Both flows query ordered position ranges without paging, sampling, or SQL-side aggregation.
+- Improvement path: Enforce bounded windows, paginate history, and push report aggregation into PostgreSQL/PostGIS or stored procedures.
 
-**TrackingMap renders all markers every position update:**
-- Problem: `positions.map()` on line 135 of `tracking-map.tsx` rerenders every marker when any position changes
-- Files: `web/src/components/map/tracking-map.tsx` (lines 135-141)
-- Cause: VehicleMarker not memoized; position array change causes all children to remount
-- Improvement path: Wrap VehicleMarker in React.memo, verify key stability
-
-**Ignition rule evaluation has no caching between position evaluations:**
-- Problem: Engine loops all rules for each position; with 100 rules × 10 devices/sec = 1000 evaluations/sec with no optimization
-- Files: `gateway/internal/alerts/engine.go` (lines 42-59)
-- Cause: No indexing of rules by device/tenant; O(n) scan per position
-- Improvement path: Build device_id → [rules] map in Syncer, use map lookup in Evaluate
+**Batch flushing can fan out concurrent writes under load:**
+- Problem: Every full batch starts `go w.Flush(context.Background())`, which can create many concurrent flush goroutines when ingress is high.
+- Files: `gateway/internal/storage/writer.go`
+- Cause: Flush triggering is edge-less and not serialized around a single worker.
+- Improvement path: Move to one writer goroutine with a bounded channel or explicit flush semaphore.
 
 ## Fragile Areas
 
-**Suntech protocol parser hardcoded field positions:**
-- Files: `gateway/internal/protocol/suntech.go` (lines 37-88)
-- Why fragile: Field indices (7=lat, 8=lon, 9=speed, etc.) are magic numbers; if protocol version adds field, indices shift and silent data corruption occurs
-- Safe modification: Add constants for field names; document protocol spec inline; add test cases for multiple protocol versions
-- Test coverage: suntech_test.go has basic parsing; missing edge cases: malformed fields, extra fields, missing optional fields
+**Gateway persistence path:**
+- Files: `gateway/cmd/gateway/main.go`, `gateway/internal/storage/writer.go`, `gateway/internal/storage/buffer.go`
+- Why fragile: The ingest path depends on batching, direct SQL string generation, optional spill-to-disk, and a fallback buffer that has no live replay path.
+- Safe modification: Treat the writer and buffer as one unit, add end-to-end failure tests before changing flush semantics, and avoid partial changes to only one side.
+- Test coverage: `gateway/internal/storage/writer_test.go` and `gateway/internal/storage/buffer_test.go` cover helper behavior, not database-backed recovery.
 
-**Binary protocol uses fixed offset hardcoded:**
-- Files: `gateway/internal/protocol/suntech_binary.go` (lines 71-96)
-- Why fragile: Offset 18-21 for latitude assumed correct; no frame version checking; if Suntech adds new header type, offsets invalid
-- Safe modification: Extract offsets to named constants; add frame type enum; add version field handling
-- Test coverage: Binary tests only cover happy path; missing: truncated frames, wrong ETX, invalid coordinates
+**Pending device tracking:**
+- Files: `gateway/internal/storage/pending.go`, `supabase/migrations/20260319_add_serial_and_pending_devices.sql`, `web/src/lib/actions/pending-devices.ts`
+- Why fragile: Deduplication relies on an in-memory `seen` map with no eviction, while the database table has no retention policy and no tenant ownership.
+- Safe modification: Add TTL eviction and cleanup jobs before increasing traffic or exposing the screen more broadly.
+- Test coverage: `gateway/internal/storage/pending_test.go` checks only timestamp comparisons and never exercises the database path.
 
-**RLS policies on dependent tables don't cascade:**
-- Files: `supabase/migrations/20260318104558_rls_policies.sql` (lines 55-69)
-- Why fragile: If geofence INSERT bypasses tenant_id check, it becomes visible to entire tenant; positions table policy doesn't verify device.tenant_id
-- Safe modification: Add WITH CHECK (device.tenant_id = get_user_tenant_id()) on positions INSERT; test policy chain
-- Test coverage: No integration tests for RLS policy violations; need test suite
-
-**History player assumes exactly one latest position per vehicle:**
-- Files: `web/src/lib/actions/positions.ts` (lines 40-46)
-- Why fragile: `.single()` throws error if 0 or 2+ positions; no error handling if query returns array
-- Safe modification: Use `.maybeSingle()` instead, check for null, handle edge cases
-- Test coverage: None; missing tests for devices with 0 positions, multiple positions same timestamp
-
-**Map re-renders on every new position via useEffect dependency array:**
-- Files: `web/src/components/map/map-controller.tsx` (line 66)
-- Why fragile: `positions` dependency array causes effect to run even if same position repeated (network retry); recentering causes jank
-- Safe modification: Memoize positions array or use useCallback with stable reference; compare latitude/longitude only
-- Test coverage: None; missing tests for repeated positions, rapid updates
+**History player UI:**
+- Files: `web/src/components/map/history-player.tsx`, `web/src/components/map/history-map-controller.tsx`, `web/src/components/map/history-mission-sidebar.tsx`
+- Why fragile: Query lifecycle, playback, and map rendering are coupled across a large client-only surface, so regressions can appear in multiple interaction modes at once.
+- Safe modification: Change one concern at a time and add component tests around the affected interaction before refactoring.
+- Test coverage: Coverage exists for several history/map helpers, but not for the full search-to-playback flow.
 
 ## Scaling Limits
 
-**Device cache grows unbounded in memory:**
-- Current capacity: ~1000s of devices per IMEI+serial mapping
-- Limit: At ~1KB per device entry, 10K devices = ~10MB (acceptable); 100K devices = ~100MB
-- Scaling path: Implement LRU cache with eviction; add cache size monitoring; consider time-based TTL
+**Monthly partitions stop at April 2026:**
+- Current capacity: `positions_2026_03` and `positions_2026_04` are the only defined partitions.
+- Limit: Inserts fail once `server_time` falls outside those ranges.
+- Scaling path: Automate future partition creation and validate partition presence during deployment.
 
-**Alert rule evaluation is O(rules × messages/sec):**
-- Current capacity: 100 rules × 10 devices × 10 msg/sec = 10K evaluations/sec on single core
-- Limit: At ~1ms per evaluation, CPU maxes out around 1000 msg/sec
-- Scaling path: Add rule indexing by device_id; consider rule engine sharding; profile hot path
+**Pending device memory and table growth are unbounded:**
+- Current capacity: `PendingWriter` keeps every seen serial in memory, and `pending_devices` accumulates rows until users delete them.
+- Limit: Long-lived gateway processes and noisy unknown devices increase memory use and operator cleanup burden.
+- Scaling path: Add TTL eviction in `gateway/internal/storage/pending.go` and a scheduled archival/purge process for `pending_devices`.
 
-**Supabase database row limit on positions table:**
-- Current capacity: Time-partitioned by week; ~100K positions/day = ~3M/month
-- Limit: Partition growth unbounded; TTL/archival not implemented
-- Scaling path: Add constraint on positions retention (e.g., 90 days); archive old partitions to cold storage
-
-**Real-time subscription broadcasts all updates to all clients:**
-- Current capacity: Supabase realtime broadcasts position changes to every connected dashboard; ~100 clients × 10 msg/sec = 1000 broadcast messages/sec
-- Limit: Realtime channel becomes bottleneck around 1000 concurrent clients
-- Scaling path: Implement client-side filtering (only subscribe to devices user follows); use webhook delivery for low-latency updates
+**Realtime duplication adds write amplification:**
+- Current capacity: Every insert into `positions` also upserts `latest_positions` via trigger.
+- Limit: Higher ingest rates double the write path and make trigger cost part of the hot path.
+- Scaling path: Benchmark trigger overhead, keep `latest_positions` lean, and consider alternative fan-out strategies if ingest volume rises materially.
 
 ## Dependencies at Risk
 
-**Leaflet/react-leaflet version pinned without security monitoring:**
-- Risk: No automated dependency updates; mapping library vulnerabilities not tracked
-- Impact: XSS via malicious tile layer URL, DOM clobbering attacks possible
-- Migration plan: Upgrade to mapbox-gl or deck.gl if leaflet becomes unmaintained; add dependabot to CI
-
-**Supabase SDK version locked:**
-- Risk: Auth API changes could break upgrades; RLS policy format may change
-- Impact: Forced to stay on outdated SDK or rewrite auth/RLS
-- Migration plan: Test upgrades in staging; monitor Supabase changelog; consider Postgres driver directly if SDK becomes blocker
-
-**Suntech GPS protocol is proprietary, undocumented outside of device manual:**
-- Risk: Protocol version bumps not tracked; binary format versioning unclear
-- Impact: New device firmware could break parser; no version negotiation mechanism
-- Migration plan: Add protocol versioning header; document format in code; request open-source Suntech spec if possible
+**Not detected:**
+- Risk: No immediate package-level abandonment or deprecation stands out more than the code-path and schema issues above.
+- Impact: Operational risk is dominated by data-flow and query-shape concerns rather than library churn.
+- Migration plan: Reassess after dependency upgrades or framework changes in `web/package.json`, `gateway/go.mod`, and `simulator/go.mod`.
 
 ## Missing Critical Features
 
-**No transaction support for device lifecycle:**
-- Problem: Creating device → assigning to vehicle → linking to geofence requires multiple queries; if step 2 fails, orphaned device remains
-- Blocks: Atomic multi-tenant operations; rollback on constraint violations
-- Fix: Implement stored procedure for device creation with all steps in single transaction
+**Geofence operations are incomplete end-to-end:**
+- Problem: The schema and navigation support geofences, but the web app exposes listing/deletion only and the gateway does not evaluate geofence rules.
+- Blocks: Tenant-managed geofence setup, geofence-based alerting, and meaningful use of seeded geofence rules.
 
-**No audit trail for alert rule changes:**
-- Problem: Admin modifies rule; affected devices get different behavior; no record of who/when/what changed
-- Blocks: Compliance audits; debugging alert misfires; user support investigations
-- Fix: Add audit_logs table with rule change events; log via trigger on alert_rules
+**Alert rule management and notification delivery are incomplete:**
+- Problem: `alert_rules.notify_email` exists in the schema, but there is no rule CRUD UI in `web/src`, and the gateway never sends notifications.
+- Blocks: Operator-configurable alert policies and any production use of email notification settings.
 
-**No dead device detection:**
-- Problem: Device stops sending positions; no alert if vehicle is stationary too long
-- Blocks: Fleet manager can't detect stolen/broken devices; needs manual checking
-- Fix: Add rule type "staleness" that triggers if no position in N minutes
-
-**No geofence violation history:**
-- Problem: Geofence alerts trigger in real-time, but log is lost if alert expires before user sees it
-- Blocks: Post-incident analysis; proving vehicle left geofence at time T
-- Fix: Add geofence_violations table; record entry/exit times; query historical violations
-
-**No batch export of positions/reports:**
-- Problem: User must query history page to see trips; no CSV export, no scheduled reports
-- Blocks: Integration with fleet analytics; spreadsheet reporting
-- Fix: Add report export endpoint; implement scheduled email delivery via background job
+**Recovered backlog replay is missing:**
+- Problem: The buffer can retain failed writes, but there is no implemented mechanism that pushes recovered backlog back into `positions`.
+- Blocks: Reliable offline buffering and safe recovery from temporary database outages.
 
 ## Test Coverage Gaps
 
-**Alert rule engine has no negative test cases:**
-- What's not tested: Invalid config types (max_speed="string"), missing config keys, rule type not matching any handler
-- Files: `gateway/internal/alerts/engine_test.go`
-- Risk: Misconfigured rules fail silently; alert triggers unpredictably
-- Priority: High — affects production fleet safety
+**Auth and request-gating flows:**
+- What's not tested: Login, registration, logout, profile creation side effects, and redirect/session refresh behavior.
+- Files: `web/src/lib/actions/auth.ts`, `web/src/lib/supabase/middleware.ts`, `web/src/proxy.ts`, `web/src/components/auth/login-form.tsx`, `web/src/components/auth/register-form.tsx`
+- Risk: Access-control regressions and tenant-join regressions can ship without detection.
+- Priority: High
 
-**TCP server connection handling has incomplete error scenarios:**
-- What's not tested: Connection closes mid-frame; duplicate IMEI from multiple IPs; protocol identification failures
-- Files: `gateway/internal/server/tcp_test.go`
-- Risk: Hung connections, silent data loss, protocol confusion
-- Priority: High — affects data ingestion reliability
+**Web server actions and query behavior:**
+- What's not tested: CRUD and read actions for devices, vehicles, alerts, geofences, pending devices, positions, and reports.
+- Files: `web/src/lib/actions/devices.ts`, `web/src/lib/actions/vehicles.ts`, `web/src/lib/actions/alerts.ts`, `web/src/lib/actions/geofences.ts`, `web/src/lib/actions/pending-devices.ts`, `web/src/lib/actions/positions.ts`, `web/src/lib/actions/reports.ts`
+- Risk: Query-shape regressions, RLS surprises, and timezone mistakes only surface at runtime against Supabase.
+- Priority: High
 
-**RLS policies have no integration tests:**
-- What's not tested: Cross-tenant data leakage, policy bypass via joins, orphaned rows without tenant_id
-- Files: None (no RLS tests exist)
-- Risk: Security vulnerability in production; multi-tenant data breach
-- Priority: Critical — must test before any customer data
+**Database policy and trigger behavior:**
+- What's not tested: RLS helper functions, signup trigger behavior, `latest_positions` trigger behavior, and partition assumptions.
+- Files: `supabase/migrations/20260318104558_rls_policies.sql`, `supabase/migrations/20260403_latest_positions_realtime.sql`, `supabase/migrations/20260318104457_positions.sql`, `supabase/migrations/20260319_add_serial_and_pending_devices.sql`
+- Risk: Multi-tenant isolation, signup safety, and realtime correctness can drift silently as migrations change.
+- Priority: High
 
-**Web Server Actions have no error simulation:**
-- What's not tested: Network timeouts, malformed Supabase responses, quota exceeded
-- Files: `web/src/lib/actions/*.ts`
-- Risk: UI breaks with generic error messages; user doesn't know if data was saved
-- Priority: Medium — affects user experience, not data integrity
-
-**History player timezone handling untested:**
-- What's not tested: Daylight saving time boundaries, UTC+12/-12 edge cases, datetime-local value conversion
-- Files: `web/src/components/map/history-player.tsx` (lines 134-137)
-- Risk: Users in non-UTC zones query wrong time period
-- Priority: Medium — affects non-Brazil users
+**Gateway persistence side effects:**
+- What's not tested: Pending-device writes, alert persistence, `last_communication_at` freshness, and recovery from PostgreSQL failures.
+- Files: `gateway/cmd/gateway/main.go`, `gateway/internal/storage/writer.go`, `gateway/internal/storage/pending.go`, `gateway/internal/alerts/engine.go`
+- Risk: The most operationally important failure paths remain unverified end-to-end.
+- Priority: High
 
 ---
 
-*Concerns audit: 2026-04-04*
+*Concerns audit: 2026-04-05*

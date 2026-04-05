@@ -1,189 +1,188 @@
 # Architecture
 
-**Analysis Date:** 2026-04-04
+**Analysis Date:** 2026-04-05
 
 ## Pattern Overview
 
-**Overall:** Three-tier microservices architecture with a Go TCP gateway receiving real-time GPS data, a PostgreSQL database with real-time subscriptions (Supabase), and a Next.js SPA dashboard. Multi-tenant SaaS with Row-Level Security (RLS) for data isolation.
+**Overall:** Service-oriented monorepo with a SQL-first backend and a route-driven web frontend.
 
 **Key Characteristics:**
-- Event-driven: GPS positions flow in → evaluation → storage → real-time broadcast
-- Resilient buffering: Write failures fall back to disk buffering
-- Protocol-agnostic: Registry pattern supports multiple GPS device protocols
-- Real-time: Supabase Realtime for position updates; WebSocket subscriptions in React
-- Multi-tenant: Tenant isolation via RLS policies on all tables
+- `gateway/` owns device ingest, protocol parsing, buffering, alert evaluation, and writes into PostgreSQL through package-local services such as `gateway/internal/server/tcp.go`, `gateway/internal/protocol/protocol.go`, and `gateway/internal/storage/writer.go`.
+- `web/` is a Next.js App Router application where pages in `web/src/app/` compose server actions from `web/src/lib/actions/` with UI components from `web/src/components/`.
+- `supabase/migrations/` is the schema source of truth; both the Go gateway and the Next.js app rely on tables, triggers, RLS policies, and Realtime setup defined there instead of local schema files.
 
 ## Layers
 
-**TCP Gateway (`gateway/cmd/gateway/main.go`):**
-- Purpose: Receive incoming GPS device data via TCP, parse using protocol registry, evaluate alert rules in-memory, batch write to PostgreSQL with resilience
-- Location: `gateway/cmd/gateway/main.go` (entry point), internal packages: `config`, `server`, `protocol`, `storage`, `alerts`, `metrics`
-- Contains: TCP connection handler, protocol parsers (Suntech binary + ASCII), alert engine, batch writer, buffering logic, metrics exporter
-- Depends on: PostgreSQL (via pgxpool), device/alert state (loaded from DB)
-- Used by: GPS devices sending data via Suntech protocol
+**Gateway Bootstrap Layer:**
+- Purpose: Compose the long-running ingest process and wire background workers.
+- Location: `gateway/cmd/gateway/main.go`
+- Contains: process startup, env config loading, database pool creation, writer setup, alert engine setup, protocol registry setup, metrics startup, and graceful shutdown.
+- Depends on: `gateway/internal/config/config.go`, `gateway/internal/server/tcp.go`, `gateway/internal/storage/writer.go`, `gateway/internal/alerts/engine.go`, `gateway/internal/alerts/sync.go`, `gateway/internal/metrics/metrics.go`, and `gateway/internal/protocol/protocol.go`.
+- Used by: `make gateway-run`, `make gateway-build`, and production execution of the gateway binary.
 
-**Protocol Layer (`gateway/internal/protocol/`):**
-- Purpose: Abstract device protocol handling via registry pattern
-- Location: `gateway/internal/protocol/protocol.go` (interface), `gateway/internal/protocol/suntech.go` (ASCII), `gateway/internal/protocol/suntech_binary.go` (binary)
-- Contains: `Parser` interface, `Position` data model, `Registry` for routing to correct parser
-- Depends on: Nothing (pure parsing)
-- Used by: TCP server to identify and parse incoming data
+**Gateway Transport Layer:**
+- Purpose: Accept TCP connections and transform raw socket frames into parsed device messages.
+- Location: `gateway/internal/server/tcp.go`
+- Contains: the TCP listener, connection lifecycle handling, frame detection, parser selection, ACK sending, and dispatch to a position handler.
+- Depends on: `gateway/internal/protocol/protocol.go` and concrete parsers such as `gateway/internal/protocol/suntech.go` and `gateway/internal/protocol/suntech_binary.go`.
+- Used by: `gateway/cmd/gateway/main.go`.
 
-**Storage Layer (`gateway/internal/storage/`):**
-- Purpose: Persist positions to PostgreSQL with automatic retry/buffering and maintain device cache
-- Location: `gateway/internal/storage/writer.go` (batch writer), `gateway/internal/storage/buffer.go` (disk fallback), `gateway/internal/storage/pending.go` (unregistered devices)
-- Contains: Batching logic (flushes at interval or size threshold), device cache keyed by IMEI, DB writer with connection pooling, file-based fallback buffer
-- Depends on: PostgreSQL connection pool (`pgxpool`)
-- Used by: Gateway handler to persist positions and track unknown devices
+**Gateway Protocol Layer:**
+- Purpose: Normalize protocol-specific payloads into one `Position` model.
+- Location: `gateway/internal/protocol/protocol.go`, `gateway/internal/protocol/suntech.go`, and `gateway/internal/protocol/suntech_binary.go`
+- Contains: the `Position` struct, parser interface, registry, Suntech ASCII parser, and Suntech binary parser.
+- Depends on: Go standard library only.
+- Used by: `gateway/internal/server/tcp.go` and downstream gateway services.
 
-**Alert Engine (`gateway/internal/alerts/`):**
-- Purpose: Evaluate alert rules in-memory on every position, evaluate against device/tenant context, persist triggered alerts
-- Location: `gateway/internal/alerts/engine.go` (evaluation), `gateway/internal/alerts/sync.go` (background rule syncer)
-- Contains: Rule store, rule evaluators (speed, ignition, battery), alert types
-- Depends on: PostgreSQL for loading rules and persisting alerts
-- Used by: Gateway handler to evaluate each position
+**Gateway Persistence Layer:**
+- Purpose: Map parsed device positions onto tenant-aware database writes.
+- Location: `gateway/internal/storage/writer.go`, `gateway/internal/storage/pending.go`, and `gateway/internal/storage/buffer.go`
+- Contains: active device cache loading, batch insert SQL generation, periodic flushing, unknown-device tracking, and fallback buffering.
+- Depends on: the shared `pgxpool.Pool` created in `gateway/cmd/gateway/main.go` and the `positions`, `devices`, `vehicles`, and `pending_devices` tables created in `supabase/migrations/`.
+- Used by: the `gateway` handler in `gateway/cmd/gateway/main.go`.
 
-**Web Application (`web/src/`):**
-- Purpose: Multi-tenant SaaS dashboard with real-time map, device/vehicle CRUD, alerts, geofences, history playback, reports
-- Location: `web/src/app/` (Next.js App Router), `web/src/lib/` (business logic), `web/src/components/` (UI)
-- Contains: Auth pages, dashboard pages, server actions (CRUD), React components, Supabase clients, hooks for real-time subscriptions
-- Depends on: Supabase (auth, database, Realtime subscriptions)
-- Used by: End users via browser
+**Gateway Alert Layer:**
+- Purpose: Keep alert rules in memory and evaluate them against each incoming position.
+- Location: `gateway/internal/alerts/engine.go` and `gateway/internal/alerts/sync.go`
+- Contains: rule model, in-memory engine, evaluators for `speed`, `ignition`, and `battery`, plus a sync worker that loads `alert_rules`.
+- Depends on: `gateway/internal/protocol/protocol.go` and the `alert_rules` / `alerts` tables from `supabase/migrations/20260318104529_geofences_and_alerts.sql`.
+- Used by: `gateway/cmd/gateway/main.go`.
 
-**Authentication (`web/src/lib/supabase/`):**
-- Purpose: Supabase Auth integration, session management, RLS enforcement via authenticated user context
-- Location: `web/src/lib/supabase/client.ts` (browser client), `web/src/lib/supabase/server.ts` (server client), `web/src/lib/supabase/middleware.ts` (session update)
-- Contains: Supabase client initialization, middleware for session refresh
-- Depends on: Supabase Auth API
-- Used by: All pages and server actions
+**Web Route Layer:**
+- Purpose: Define the authenticated and unauthenticated page tree.
+- Location: `web/src/app/(auth)/`, `web/src/app/(dashboard)/`, `web/src/app/layout.tsx`, and `web/src/app/auth/callback/route.ts`
+- Contains: route groups, layouts, page entry points, and the Supabase auth callback route.
+- Depends on: server actions in `web/src/lib/actions/`, layout components such as `web/src/components/dashboard/sidebar.tsx`, and auth helpers in `web/src/lib/supabase/server.ts`.
+- Used by: Next.js runtime via `web/package.json` scripts.
 
-**Database (`supabase/migrations/`):**
-- Purpose: Multi-tenant PostgreSQL with PostGIS, time-partitioned positions table, Realtime subscriptions
-- Location: `supabase/migrations/` (9 sequential migrations)
-- Contains: Tables (tenants, profiles, devices, vehicles, positions, geofences, alerts, latest_positions), RLS policies, PostGIS geometry column, time partitioning on positions
-- Depends on: PostgreSQL extensions (PostGIS, uuid-ossp)
-- Used by: Gateway (write positions, read devices/rules), Web (read/write via Supabase client with RLS)
+**Web Server Action Layer:**
+- Purpose: Concentrate database reads, writes, and cache invalidation behind server-side functions.
+- Location: `web/src/lib/actions/auth.ts`, `web/src/lib/actions/devices.ts`, `web/src/lib/actions/vehicles.ts`, `web/src/lib/actions/positions.ts`, `web/src/lib/actions/alerts.ts`, `web/src/lib/actions/geofences.ts`, `web/src/lib/actions/pending-devices.ts`, `web/src/lib/actions/reports.ts`, and `web/src/lib/actions/utils.ts`
+- Contains: Supabase queries, auth mutations, CRUD mutations, report generation, and route revalidation.
+- Depends on: `web/src/lib/supabase/server.ts`, `web/src/lib/actions/utils.ts`, and the tables defined in `supabase/migrations/`.
+- Used by: server pages in `web/src/app/` and client components that call server actions directly.
+
+**Web Client Interaction Layer:**
+- Purpose: Handle browser-only state, live subscriptions, and Leaflet rendering.
+- Location: `web/src/app/(dashboard)/dashboard-map.tsx`, `web/src/components/map/`, `web/src/components/devices/`, `web/src/components/vehicles/`, `web/src/components/alerts/`, and `web/src/lib/hooks/use-realtime-positions.ts`
+- Contains: map rendering, mobile/desktop dashboard chrome, dialogs, tables, and realtime updates from Supabase.
+- Depends on: server actions, `web/src/lib/supabase/client.ts`, and browser-only libraries declared in `web/package.json`.
+- Used by: route files under `web/src/app/(dashboard)/`.
+
+**Database Layer:**
+- Purpose: Hold the multi-tenant domain model and DB-side automation.
+- Location: `supabase/migrations/`, `supabase/seed.sql`, and `supabase/config.toml`
+- Contains: DDL, partitioned `positions`, `latest_positions` trigger-based projection, RLS policies, helper SQL functions, and seed data.
+- Depends on: Supabase CLI and PostgreSQL/PostGIS.
+- Used by: both `gateway/` and `web/`.
+
+**Simulation Layer:**
+- Purpose: Generate fake Suntech traffic against the ingest port.
+- Location: `simulator/cmd/simulator/main.go` and `simulator/internal/suntech/generator.go`
+- Contains: CLI flags, TCP client loop, route generation, and message generation.
+- Depends on: the protocol assumptions implemented in `gateway/internal/protocol/suntech.go`.
+- Used by: local development and ingest verification.
 
 ## Data Flow
 
-**GPS Position Ingestion:**
-1. GPS device connects via TCP to gateway on port 5001
-2. TCP server receives raw bytes, passes to protocol registry
-3. Registry identifies protocol (Suntech binary or ASCII), parser extracts Position struct
-4. Position sent to gateway handler → alert engine evaluates rules → position enqueued to batch writer
-5. Batch writer accumulates positions, flushes every 1s or at 100 size threshold to `positions` table
-6. On write error: positions buffered to disk (`buffer.db`)
-7. Triggered alerts inserted to `alerts` table (separate write path)
+**Device Position Ingest:**
 
-**Real-Time Position Broadcast (Dashboard):**
-1. Server Action `getLatestPositions()` fetches latest position per device from `positions` table
-2. Dashboard page loads with initial positions, renders map with markers
-3. React hook `useRealtimePositions()` subscribes to Supabase Realtime changes on `latest_positions` table
-4. When new position inserted, PostgreSQL trigger updates `latest_positions` materialized view
-5. Realtime subscription delivers change → React state updates → markers move on map
+1. `gateway/cmd/gateway/main.go` starts the TCP server from `gateway/internal/server/tcp.go` and injects a `gateway` handler.
+2. `gateway/internal/server/tcp.go` reads each frame, picks a parser from `gateway/internal/protocol/protocol.go`, parses it, optionally writes protocol ACK bytes, and calls `HandlePosition`.
+3. `gateway/cmd/gateway/main.go` resolves the device through `gateway/internal/storage/writer.go`; unknown identifiers are sent to `gateway/internal/storage/pending.go`, while known positions are enqueued for batch persistence.
+4. `gateway/internal/alerts/engine.go` evaluates the same position against in-memory rules synchronized by `gateway/internal/alerts/sync.go`; triggered alerts are inserted into `alerts`.
+5. `gateway/internal/storage/writer.go` flushes to the `positions` table defined in `supabase/migrations/20260318104457_positions.sql`.
+6. The trigger in `supabase/migrations/20260403_latest_positions_realtime.sql` upserts one row per device into `latest_positions` so Supabase Realtime can broadcast frontend-friendly updates.
 
-**Device Registration Flow:**
-1. Unknown IMEI arrives → `pending.Track()` records IMEI + remote IP to `pending_devices` table
-2. Admin links pending device to actual device record in UI
-3. Gateway reloads device cache every 30s via `LoadDevices()`
-4. Future positions from that IMEI now found in cache → persisted normally
+**Dashboard Map Read Path:**
+
+1. `web/src/app/(dashboard)/page.tsx` calls `getLatestPositions` from `web/src/lib/actions/positions.ts` on the server.
+2. `web/src/lib/actions/positions.ts` reads active devices, fetches their most recent `positions` rows, and maps PostGIS values through `web/src/lib/map/position-location.ts`.
+3. `web/src/app/(dashboard)/dashboard-map.tsx` receives the initial snapshot, dynamically loads `web/src/components/map/tracking-map.tsx`, and manages UI selection/filter state.
+4. `web/src/lib/hooks/use-realtime-positions.ts` subscribes to `latest_positions` through `web/src/lib/supabase/client.ts` and merges updates into local React state keyed by `device_id`.
+
+**Authenticated CRUD Path:**
+
+1. Layout and session protection run through `web/src/proxy.ts` and `web/src/lib/supabase/middleware.ts`.
+2. A page such as `web/src/app/(dashboard)/devices/page.tsx` or `web/src/app/(dashboard)/vehicles/page.tsx` gathers initial data from server actions.
+3. Interactive components such as `web/src/components/devices/device-dialog.tsx` and `web/src/components/vehicles/vehicle-dialog.tsx` call mutation actions in `web/src/lib/actions/devices.ts` or `web/src/lib/actions/vehicles.ts`.
+4. Each action writes through Supabase with RLS enforced by `supabase/migrations/20260318104558_rls_policies.sql`, then invalidates route output with `revalidatePath`.
 
 **State Management:**
-- Gateway: In-memory device cache (keyed by IMEI), alert rules cache (in alert engine)
-- Web: Client-side React state (Map position tracking), server-side session via Supabase Auth
-- Database: Source of truth for all state (devices, positions, rules, alerts, geofences)
+- Durable application state lives in Supabase tables declared in `supabase/migrations/`.
+- Request-scoped server state is resolved inside server actions such as `web/src/lib/actions/utils.ts`.
+- Browser state is local and component-scoped, using `useState`, `useEffect`, and custom hooks like `web/src/lib/hooks/use-realtime-positions.ts`.
+- Gateway runtime state is in-memory and package-local, mainly the device cache in `gateway/internal/storage/writer.go`, alert rules in `gateway/internal/alerts/engine.go`, and connection counters in `gateway/internal/server/tcp.go`.
 
 ## Key Abstractions
 
-**Position (`gateway/internal/protocol/protocol.go`):**
-- Purpose: Unified data model for GPS position across all device protocols
-- Examples: Struct with IMEI, latitude, longitude, speed, heading, battery, timestamp, raw data
-- Pattern: Common struct extracted from different protocol formats; all parsers return same type
+**Normalized Position Model:**
+- Purpose: Represent one device location update independently of transport format.
+- Examples: `gateway/internal/protocol/protocol.go`, `web/src/components/map/types.ts`, and `web/src/lib/actions/positions.ts`
+- Pattern: transport-specific parsing first, then app-specific projection per consumer.
 
-**Parser Interface (`gateway/internal/protocol/protocol.go`):**
-- Purpose: Protocol abstraction allowing new device types without changing gateway core
-- Examples: `Parser` interface with methods `Identify(data)`, `Parse(data)`, `ACK(data)`, `Name()`
-- Pattern: Registry pattern; each parser identifies its format, parses to common Position struct, returns ACK bytes
+**Protocol Registry:**
+- Purpose: Keep protocol identification and parsing extensible.
+- Examples: `gateway/internal/protocol/protocol.go`, `gateway/internal/protocol/suntech.go`, and `gateway/internal/protocol/suntech_binary.go`
+- Pattern: registry plus parser interface; add new parser implementations without changing the TCP server loop.
 
-**DeviceInfo Cache (`gateway/internal/storage/writer.go`):**
-- Purpose: Map IMEI → {DeviceID, TenantID, VehicleID} for quick lookup on each position without DB hit
-- Examples: Map[string]DeviceInfo, reloaded every 30s in background goroutine
-- Pattern: In-memory cache with periodic refresh; miss path writes to pending_devices table
+**Server Actions as Application Services:**
+- Purpose: Centralize app-side database access behind explicit functions instead of sprinkling Supabase calls in page components.
+- Examples: `web/src/lib/actions/devices.ts`, `web/src/lib/actions/vehicles.ts`, `web/src/lib/actions/positions.ts`, and `web/src/lib/actions/reports.ts`
+- Pattern: `use server` modules return typed data or simple `{ error | success }` payloads and own cache revalidation.
 
-**Rule Evaluator (`gateway/internal/alerts/engine.go`):**
-- Purpose: Strategy pattern for different alert types (speed, ignition, battery)
-- Examples: Methods `evaluateSpeed()`, `evaluateIgnition()`, `evaluateBattery()`
-- Pattern: Switch on rule.Type, each evaluator checks rule.Config and position data, returns Alert if triggered
-
-**Server Actions (`web/src/lib/actions/`):**
-- Purpose: Backend functions callable from React components, automatically serialize/deserialize
-- Examples: `getDevices()`, `createDevice(formData)`, `getPositionHistory()`, `getAlerts()`
-- Pattern: `"use server"` directive; form data passed from client, mutations revalidate cache paths
-
-**Real-Time Hook (`web/src/lib/hooks/use-realtime-positions.ts`):**
-- Purpose: Subscribe to position changes, maintain client-side Map state, sync with server state
-- Examples: Takes initial positions array, returns live-updating array as Supabase Realtime delivers changes
-- Pattern: useEffect subscribes to channel, cleanup unsubscribes; state merges new values with existing by device_id
+**SQL Projection for Realtime:**
+- Purpose: Separate write-optimized partitioned history from read-optimized live subscriptions.
+- Examples: `supabase/migrations/20260318104457_positions.sql` and `supabase/migrations/20260403_latest_positions_realtime.sql`
+- Pattern: append-only historical table plus trigger-maintained latest-state table.
 
 ## Entry Points
 
-**Gateway TCP Server (`gateway/cmd/gateway/main.go`):**
+**Gateway Service:**
 - Location: `gateway/cmd/gateway/main.go`
-- Triggers: `go run ./cmd/gateway` or binary execution
-- Responsibilities: Initialize DB pool, load config, start TCP server, start background workers (flusher, device reloader, rule syncer, metrics server), handle SIGINT for graceful shutdown
+- Triggers: `make gateway-run`, `make gateway-build`, or direct `go run ./cmd/gateway`.
+- Responsibilities: bootstrap dependencies, start background workers, receive TCP traffic, and shut down gracefully.
 
-**Web Root Layout (`web/src/app/layout.tsx`):**
-- Location: `web/src/app/layout.tsx`
-- Triggers: Browser navigation to any URL
-- Responsibilities: Set page metadata, load fonts (Plus Jakarta Sans, JetBrains Mono), apply Tailwind/dark mode styling
+**Web Application:**
+- Location: `web/src/app/layout.tsx`, `web/src/app/(auth)/`, and `web/src/app/(dashboard)/`
+- Triggers: `npm run dev` or `npm run build` from `web/package.json`.
+- Responsibilities: render pages, enforce auth boundaries, and compose server/client UI.
 
-**Web Middleware (`web/src/lib/supabase/middleware.ts`):**
-- Location: Invoked before every route via `middleware.ts` in web root
-- Triggers: Every request
-- Responsibilities: Refresh Supabase session cookies, redirect unauthenticated users to /login (except auth pages)
+**Web Auth Proxy:**
+- Location: `web/src/proxy.ts`
+- Triggers: Next.js request pipeline for matched routes.
+- Responsibilities: route all non-static requests through `web/src/lib/supabase/middleware.ts` for session refresh and login redirects.
 
-**Dashboard Page (`web/src/app/(dashboard)/page.tsx`):**
-- Location: `web/src/app/(dashboard)/page.tsx`
-- Triggers: Route /dashboard
-- Responsibilities: Call server action `getLatestPositions()`, pass to DashboardMap component
+**Simulator CLI:**
+- Location: `simulator/cmd/simulator/main.go`
+- Triggers: `make simulator-run` or direct `go run ./cmd/simulator`.
+- Responsibilities: open a TCP connection and emit fake Suntech messages at a configurable interval.
 
-**Auth Callback Route (`web/src/app/auth/callback/route.ts`):**
-- Location: `web/src/app/auth/callback/route.ts`
-- Triggers: Supabase redirects here after email confirmation
-- Responsibilities: Exchange callback code for session, redirect to dashboard
+**Database Migration Stream:**
+- Location: `supabase/migrations/`
+- Triggers: `make db-push`, `make db-reset`, or direct Supabase CLI usage from the root `Makefile`.
+- Responsibilities: evolve schema, policies, triggers, and generated database-facing types.
 
 ## Error Handling
 
-**Strategy:** Fail-open with buffering at write layer; in-memory rule evaluation never fails (rules are self-contained).
+**Strategy:** Fail fast on startup misconfiguration, log and continue on per-message ingest problems, and surface application errors from web actions either by throwing or by returning small status objects.
 
 **Patterns:**
-- **Write failures:** Position write fails → callback `OnFlushError()` enqueues to disk buffer → buffer can be replayed later
-- **Database connection:** Shared connection pool with 5-min timeout; if pool exhausted, new writes wait or eventually timeout
-- **Rule evaluation:** Unknown rule type returns `(Alert{}, false)` silently; malformed rule config returns false
-- **Protocol parse:** Unknown protocol returns nil parser → position ignored with log warning
-- **Auth failures:** Unauthenticated requests redirected to /login by middleware; invalid tokens handled by Supabase SDK
-- **Realtime subscription:** If subscription fails, React component still shows initial server data; subscription retries automatically
+- `gateway/cmd/gateway/main.go` exits the process when config or database bootstrap fails.
+- `gateway/internal/server/tcp.go` logs unknown protocols and parse failures, then continues serving the same process.
+- `gateway/internal/storage/writer.go` routes failed flushes into the fallback buffer callback instead of dropping the entire process.
+- `web/src/lib/actions/positions.ts` and `web/src/lib/actions/reports.ts` throw `Error` for failed queries on read paths.
+- `web/src/lib/actions/auth.ts`, `web/src/lib/actions/devices.ts`, and `web/src/lib/actions/vehicles.ts` often return `{ error: string }` or `{ success: true }` for form-driven mutations.
+- `web/src/lib/supabase/middleware.ts` converts auth absence into redirects instead of rendering protected pages.
 
 ## Cross-Cutting Concerns
 
-**Logging:** Gateway uses structured logging (`slog` with JSON handler to stdout); Web uses console.log for client-side, server actions can use console.log
+**Logging:** `gateway/cmd/gateway/main.go` configures JSON `slog` and passes the logger into storage, alerts, metrics, and server packages. The web app relies mainly on framework behavior and does not define a shared logging layer in `web/src/`.
 
-**Validation:** 
-- Gateway: Parser validates protocol format and extracts fields; invalid data logged and ignored
-- Web: Form validation at UI level (HTML5) + server-side form parsing; Supabase RLS validates tenant_id
-- Database: NOT NULL constraints, check constraints on alert_severity/type enums
+**Validation:** Runtime validation is mostly implicit. `gateway/internal/config/config.go` validates env parsing, protocol parsers validate frame shape, and database rules in `supabase/migrations/` enforce most structural constraints. The web app does not maintain a separate validation layer beyond basic field parsing inside action files such as `web/src/lib/actions/vehicles.ts`.
 
-**Authentication:** 
-- Gateway: No auth (assumes secure network); all positions written under tenant inferred from device cache
-- Web: Supabase Auth (email/password + magic link); JWTs in cookies; session refresh in middleware
-- Database: RLS policies use `auth.uid()` → profile → tenant_id to filter rows per user
-
-**Multi-tenancy:** 
-- Every data table has `tenant_id` column
-- RLS policies filter by user's tenant_id (via JOIN through profiles)
-- Gateway writes using device's cached tenant_id
-- Web cannot see rows from other tenants
+**Authentication:** Session handling is centralized in `web/src/lib/supabase/server.ts`, `web/src/lib/supabase/client.ts`, `web/src/lib/supabase/middleware.ts`, and `web/src/app/auth/callback/route.ts`. Tenant isolation is enforced in SQL through `supabase/migrations/20260318104558_rls_policies.sql`.
 
 ---
 
-*Architecture analysis: 2026-04-04*
+*Architecture analysis: 2026-04-05*

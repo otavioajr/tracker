@@ -1,307 +1,226 @@
 # Codebase Structure
 
-**Analysis Date:** 2026-04-04
+**Analysis Date:** 2026-04-05
 
 ## Directory Layout
 
-```
+```text
 tracker/
-├── gateway/                          # Go TCP server (position ingestion + alerts)
-│   ├── cmd/
-│   │   └── gateway/
-│   │       └── main.go              # Entry point: initialize server, DB, workers
-│   ├── internal/
-│   │   ├── config/                  # Load environment configuration
-│   │   ├── server/                  # TCP server (connection handling)
-│   │   ├── protocol/                # GPS protocol parsers (Suntech binary/ASCII)
-│   │   ├── storage/                 # Position writer, device cache, pending devices
-│   │   ├── alerts/                  # Alert rule engine and syncer
-│   │   └── metrics/                 # Prometheus metrics export
-│   ├── go.mod / go.sum              # Go dependencies
-│   └── bin/                         # Compiled binary (generated)
-│
-├── web/                             # Next.js 16 SPA dashboard
-│   ├── src/
-│   │   ├── app/                     # Next.js App Router (route groups)
-│   │   │   ├── layout.tsx           # Root layout (fonts, metadata)
-│   │   │   ├── globals.css          # Tailwind CSS
-│   │   │   ├── (auth)/              # Public auth routes
-│   │   │   │   ├── login/page.tsx
-│   │   │   │   ├── register/page.tsx
-│   │   │   │   └── layout.tsx
-│   │   │   ├── auth/callback/       # Supabase callback
-│   │   │   │   └── route.ts
-│   │   │   └── (dashboard)/         # Protected dashboard routes
-│   │   │       ├── page.tsx         # Map (/)
-│   │   │       ├── devices/page.tsx
-│   │   │       ├── vehicles/page.tsx
-│   │   │       ├── history/page.tsx
-│   │   │       ├── alerts/page.tsx
-│   │   │       ├── geofences/page.tsx
-│   │   │       ├── reports/page.tsx
-│   │   │       ├── layout.tsx       # Dashboard layout (sidebar, header)
-│   │   │       └── dashboard-map.tsx # Map container component
-│   │   │
-│   │   ├── components/              # React UI components
-│   │   │   ├── ui/                  # Shadcn UI primitives (Button, Card, etc.)
-│   │   │   ├── dashboard/           # Dashboard-specific (Header, Sidebar, MobileNav)
-│   │   │   ├── map/                 # Leaflet map components
-│   │   │   │   ├── tracking-map.tsx # Main map with dynamic Leaflet
-│   │   │   │   ├── vehicle-marker.tsx
-│   │   │   │   ├── map-controller.tsx
-│   │   │   │   ├── history-player.tsx
-│   │   │   │   └── history-map-controller.tsx
-│   │   │   ├── auth/                # Auth form components
-│   │   │   ├── devices/             # Device CRUD components
-│   │   │   ├── vehicles/            # Vehicle CRUD components
-│   │   │   ├── alerts/              # Alert list/config components
-│   │   │   └── geofences/           # Geofence components
-│   │   │
-│   │   ├── lib/                     # Business logic, hooks, utilities
-│   │   │   ├── supabase/            # Supabase integration
-│   │   │   │   ├── client.ts        # Browser client (createClient)
-│   │   │   │   ├── server.ts        # Server client (createClient)
-│   │   │   │   └── middleware.ts    # Session refresh + auth redirect
-│   │   │   │
-│   │   │   ├── actions/             # Next.js Server Actions
-│   │   │   │   ├── auth.ts          # Login, register, logout
-│   │   │   │   ├── devices.ts       # Device CRUD
-│   │   │   │   ├── vehicles.ts      # Vehicle CRUD
-│   │   │   │   ├── positions.ts     # Position queries (latest, history)
-│   │   │   │   ├── alerts.ts        # Alert queries
-│   │   │   │   ├── geofences.ts     # Geofence CRUD
-│   │   │   │   ├── reports.ts       # Report generation
-│   │   │   │   ├── pending-devices.ts # Pending device linking
-│   │   │   │   └── utils.ts         # getTenantId() helper
-│   │   │   │
-│   │   │   ├── hooks/               # React hooks
-│   │   │   │   └── use-realtime-positions.ts # Subscribe to position updates
-│   │   │   │
-│   │   │   ├── db/                  # Drizzle ORM client
-│   │   │   │   └── index.ts         # db = drizzle(postgres(...))
-│   │   │   │
-│   │   │   └── utils.ts             # Utility functions (cn, etc.)
-│   │   │
-│   │   └── types/
-│   │       └── database.ts          # Auto-generated Supabase types (make db-types)
-│   │
-│   ├── package.json                 # npm dependencies
-│   ├── next.config.ts               # Next.js config
-│   ├── tailwind.config.ts           # Tailwind CSS config
-│   └── tsconfig.json                # TypeScript config
-│
-├── simulator/                       # Go TCP client (generates fake GPS data)
-│   ├── cmd/
-│   │   └── simulator/
-│   │       └── main.go              # Entry point: parse flags, connect, send positions
-│   ├── internal/
-│   │   └── suntech/                 # Route generation, position generation
-│   ├── go.mod / go.sum
-│   └── bin/                         # Compiled binary (generated)
-│
-├── supabase/                        # Database migrations and config
-│   ├── migrations/                  # Sequential SQL migrations (9 total)
-│   │   ├── 20260318104209_extensions_and_enums.sql
-│   │   ├── 20260318104403_tenants_and_profiles.sql
-│   │   ├── 20260318104428_devices_and_vehicles.sql
-│   │   ├── 20260318104457_positions.sql
-│   │   ├── 20260318104529_geofences_and_alerts.sql
-│   │   ├── 20260318104558_rls_policies.sql
-│   │   ├── 20260318110000_add_vehicle_id_to_positions.sql
-│   │   ├── 20260319_add_serial_and_pending_devices.sql
-│   │   ├── 20260321_add_vehicle_name.sql
-│   │   └── 20260403_latest_positions_realtime.sql
-│   ├── config.toml                  # Supabase CLI config
-│   └── seed.sql                     # Optional test data
-│
-├── docs/                            # Documentation
-│   └── superpowers/
-│       ├── specs/                   # Feature specifications (user stories, acceptance criteria)
-│       └── plans/                   # Implementation plans (generated by gsd-planner)
-│
-├── .planning/                       # GSD generated documentation
-│   └── codebase/                    # Codebase analysis documents (this dir)
-│       ├── ARCHITECTURE.md
-│       ├── STRUCTURE.md
-│       ├── CONVENTIONS.md           # (if tech focus)
-│       └── ...
-│
-├── Makefile                         # Build/run commands
-├── CLAUDE.md                        # Project instructions
-├── README.md                        # Project overview
-└── docker-compose.yml               # Local Supabase setup (optional)
+├── gateway/              # Go TCP ingest service
+├── simulator/            # Go device traffic generator
+├── supabase/             # SQL migrations, local Supabase config, and seed data
+├── web/                  # Next.js dashboard application
+├── docs/                 # Project docs outside runtime code
+├── .planning/codebase/   # Generated codebase reference documents
+└── Makefile              # Root command entrypoint for services and database tasks
 ```
 
 ## Directory Purposes
 
-**`gateway/cmd/gateway/`:**
-- Purpose: Entry point and main application logic
-- Contains: main.go only; all packages in internal/
-- Key files: `main.go` (initialize DB pool, start TCP server, background workers)
+**`gateway/`:**
+- Purpose: Own the production ingest runtime for device traffic.
+- Contains: `gateway/cmd/gateway/main.go`, package-local code in `gateway/internal/`, Go module files in `gateway/go.mod`, and generated binaries in `gateway/bin/`.
+- Key files: `gateway/cmd/gateway/main.go`, `gateway/internal/server/tcp.go`, `gateway/internal/storage/writer.go`, `gateway/internal/alerts/engine.go`, and `gateway/internal/protocol/protocol.go`.
 
 **`gateway/internal/config/`:**
-- Purpose: Environment variable loading and defaults
-- Contains: Config struct, Load() function
-- Key files: `config.go`, `config_test.go`
+- Purpose: Keep environment-driven runtime configuration isolated from bootstrap code.
+- Contains: `gateway/internal/config/config.go` and `gateway/internal/config/config_test.go`.
+- Key files: `gateway/internal/config/config.go`.
 
 **`gateway/internal/server/`:**
-- Purpose: TCP connection handling and protocol dispatch
-- Contains: TCP server struct, connection lifecycle, reader loop
-- Key files: `tcp.go` (main server), `tcp_test.go`
+- Purpose: Hold transport-facing TCP logic.
+- Contains: `gateway/internal/server/tcp.go` and `gateway/internal/server/tcp_test.go`.
+- Key files: `gateway/internal/server/tcp.go`.
 
 **`gateway/internal/protocol/`:**
-- Purpose: GPS protocol parsing abstraction
-- Contains: Parser interface, Position struct, Registry for routing, Suntech parser implementations
-- Key files: `protocol.go` (interfaces), `suntech.go` (ASCII), `suntech_binary.go` (binary), tests
+- Purpose: Group protocol abstractions and concrete Suntech parsers.
+- Contains: `gateway/internal/protocol/protocol.go`, `gateway/internal/protocol/suntech.go`, `gateway/internal/protocol/suntech_binary.go`, and matching `_test.go` files.
+- Key files: `gateway/internal/protocol/protocol.go`, `gateway/internal/protocol/suntech.go`, and `gateway/internal/protocol/suntech_binary.go`.
 
 **`gateway/internal/storage/`:**
-- Purpose: Batch writing, device caching, buffering, pending device tracking
-- Contains: Writer (batches positions), Buffer (disk fallback), PendingWriter (unregistered devices)
-- Key files: `writer.go`, `buffer.go`, `pending.go`, tests
+- Purpose: Hold database-oriented ingest helpers.
+- Contains: `gateway/internal/storage/writer.go`, `gateway/internal/storage/pending.go`, `gateway/internal/storage/buffer.go`, and matching tests.
+- Key files: `gateway/internal/storage/writer.go`, `gateway/internal/storage/pending.go`, and `gateway/internal/storage/buffer.go`.
 
 **`gateway/internal/alerts/`:**
-- Purpose: Alert rule evaluation and synchronization
-- Contains: Engine (in-memory rule store + evaluators), Syncer (background reload from DB)
-- Key files: `engine.go` (evaluation logic), `sync.go` (periodic reload)
+- Purpose: Keep alert rule synchronization and evaluation together.
+- Contains: `gateway/internal/alerts/engine.go`, `gateway/internal/alerts/sync.go`, and `_test.go` files.
+- Key files: `gateway/internal/alerts/engine.go` and `gateway/internal/alerts/sync.go`.
 
 **`gateway/internal/metrics/`:**
-- Purpose: Prometheus metrics export
-- Contains: Metrics struct, HTTP server for metrics endpoint
-- Key files: `metrics.go`
+- Purpose: Expose ingest metrics.
+- Contains: `gateway/internal/metrics/metrics.go`.
+- Key files: `gateway/internal/metrics/metrics.go`.
+
+**`simulator/`:**
+- Purpose: Provide a standalone CLI for sending fake Suntech packets to the gateway.
+- Contains: `simulator/cmd/simulator/main.go`, `simulator/internal/suntech/generator.go`, and tests.
+- Key files: `simulator/cmd/simulator/main.go` and `simulator/internal/suntech/generator.go`.
+
+**`supabase/`:**
+- Purpose: Store database definition and local Supabase project config.
+- Contains: versioned SQL files in `supabase/migrations/`, seed data in `supabase/seed.sql`, and CLI config in `supabase/config.toml`.
+- Key files: `supabase/migrations/20260318104457_positions.sql`, `supabase/migrations/20260318104558_rls_policies.sql`, `supabase/migrations/20260403_latest_positions_realtime.sql`, `supabase/seed.sql`, and `supabase/config.toml`.
+
+**`web/`:**
+- Purpose: Hold the dashboard UI and all app-side integration logic.
+- Contains: Next.js config in `web/next.config.ts`, TypeScript config in `web/tsconfig.json`, test config in `web/vitest.config.ts`, and the application source tree in `web/src/`.
+- Key files: `web/package.json`, `web/next.config.ts`, `web/tsconfig.json`, and `web/src/app/layout.tsx`.
 
 **`web/src/app/`:**
-- Purpose: Next.js App Router; each page is a route
-- Contains: Page components, layouts, callback handlers
-- Key files: All `page.tsx` files are routes; `layout.tsx` nests children
+- Purpose: Define routes, route groups, layouts, and route handlers.
+- Contains: authenticated routes in `web/src/app/(dashboard)/`, public auth routes in `web/src/app/(auth)/`, the auth callback route in `web/src/app/auth/callback/route.ts`, and app-wide layout/style files.
+- Key files: `web/src/app/layout.tsx`, `web/src/app/(dashboard)/layout.tsx`, `web/src/app/(dashboard)/page.tsx`, `web/src/app/(dashboard)/devices/page.tsx`, `web/src/app/(dashboard)/history/page.tsx`, and `web/src/app/auth/callback/route.ts`.
 
-**`web/src/app/(dashboard)/`:**
-- Purpose: Protected dashboard routes (wrapped in route group for shared layout)
-- Contains: Dashboard page, sub-pages (devices, vehicles, history, etc.), DashboardMap component
-- Key files: `page.tsx` (root map), `layout.tsx` (sidebar + header), `dashboard-map.tsx` (client component)
-
-**`web/src/components/map/`:**
-- Purpose: Leaflet map integration and vehicle markers
-- Contains: TrackingMap (dynamic import), VehicleMarker (icon, popup), history player
-- Key files: `tracking-map.tsx` (main map with layers), `vehicle-marker.tsx` (marker rendering), `history-player.tsx` (playback UI)
-
-**`web/src/lib/supabase/`:**
-- Purpose: Supabase client setup, middleware, session management
-- Contains: Client initialization, middleware for session refresh and auth guards
-- Key files: `client.ts` (browser), `server.ts` (server), `middleware.ts` (request handler)
+**`web/src/components/`:**
+- Purpose: Hold reusable UI split by feature/domain.
+- Contains: domain folders such as `web/src/components/map/`, `web/src/components/devices/`, `web/src/components/vehicles/`, `web/src/components/alerts/`, and base primitives in `web/src/components/ui/`.
+- Key files: `web/src/components/map/tracking-map.tsx`, `web/src/components/map/history-player.tsx`, `web/src/components/devices/device-table.tsx`, `web/src/components/vehicles/vehicle-table.tsx`, and `web/src/components/dashboard/sidebar.tsx`.
 
 **`web/src/lib/actions/`:**
-- Purpose: Server Actions for data fetching and mutations
-- Contains: Functions marked with "use server" for CRUD, queries, auth
-- Key files: `devices.ts`, `vehicles.ts`, `positions.ts`, `alerts.ts`, `geofences.ts`, `reports.ts`, `auth.ts`, `utils.ts` (getTenantId)
+- Purpose: Centralize server actions and request-scoped application logic.
+- Contains: resource-specific action modules such as `web/src/lib/actions/devices.ts`, `web/src/lib/actions/vehicles.ts`, `web/src/lib/actions/positions.ts`, and `web/src/lib/actions/reports.ts`.
+- Key files: `web/src/lib/actions/auth.ts`, `web/src/lib/actions/devices.ts`, `web/src/lib/actions/vehicles.ts`, `web/src/lib/actions/positions.ts`, `web/src/lib/actions/pending-devices.ts`, and `web/src/lib/actions/utils.ts`.
+
+**`web/src/lib/supabase/`:**
+- Purpose: Keep Supabase client construction and middleware glue isolated.
+- Contains: `web/src/lib/supabase/server.ts`, `web/src/lib/supabase/client.ts`, and `web/src/lib/supabase/middleware.ts`.
+- Key files: `web/src/lib/supabase/server.ts`, `web/src/lib/supabase/client.ts`, and `web/src/lib/supabase/middleware.ts`.
+
+**`web/src/lib/map/` and `web/src/lib/history/`:**
+- Purpose: Hold pure helpers that map DB data into frontend behavior.
+- Contains: `web/src/lib/map/position-location.ts`, `web/src/lib/map/dashboard-map-utils.ts`, and `web/src/lib/history/history-player-utils.ts` plus colocated tests.
+- Key files: `web/src/lib/map/position-location.ts`, `web/src/lib/map/dashboard-map-utils.ts`, and `web/src/lib/history/history-player-utils.ts`.
 
 **`web/src/lib/hooks/`:**
-- Purpose: Custom React hooks
-- Contains: Realtime subscription hook
-- Key files: `use-realtime-positions.ts`
+- Purpose: Hold custom React hooks for browser-only concerns.
+- Contains: `web/src/lib/hooks/use-realtime-positions.ts`.
+- Key files: `web/src/lib/hooks/use-realtime-positions.ts`.
 
-**`web/src/lib/db/`:**
-- Purpose: Drizzle ORM client initialization
-- Contains: Single db instance exported
-- Key files: `index.ts` (drizzle(postgres(...)))
-
-**`supabase/migrations/`:**
-- Purpose: Sequential SQL migrations applied in order
-- Contains: DDL for schema, RLS policies, triggers
-- Order matters: Extensions/enums → Tenants → Devices → Positions → Geofences/Alerts → RLS → Updates → Pending → Realtime
+**`web/src/types/`:**
+- Purpose: Hold shared TypeScript types that are not component-local.
+- Contains: generated database types in `web/src/types/database.ts`.
+- Key files: `web/src/types/database.ts`.
 
 ## Key File Locations
 
 **Entry Points:**
-- `gateway/cmd/gateway/main.go`: Gateway startup, DB init, server listen
-- `web/src/app/layout.tsx`: Web app root layout and metadata
-- `web/src/app/auth/callback/route.ts`: Supabase OAuth callback handler
-- `web/src/app/(dashboard)/page.tsx`: Dashboard map page
+- `Makefile`: root task runner for gateway, web, simulator, and Supabase commands.
+- `gateway/cmd/gateway/main.go`: gateway process entrypoint.
+- `simulator/cmd/simulator/main.go`: simulator CLI entrypoint.
+- `web/src/app/layout.tsx`: root Next.js layout.
+- `web/src/proxy.ts`: request-level auth/session guard for the web app.
+- `web/src/app/auth/callback/route.ts`: auth callback route for Supabase session exchange.
 
 **Configuration:**
-- `gateway/.env`: Gateway env vars (DATABASE_URL, TCP_PORT, METRICS_PORT)
-- `web/.env.local`: Web env vars (Supabase keys, DATABASE_URL)
-- `Makefile`: Build and run commands
+- `gateway/internal/config/config.go`: gateway env parsing and defaults.
+- `web/package.json`: web scripts and dependency list.
+- `web/next.config.ts`: Next.js build/runtime config.
+- `web/tsconfig.json`: path aliases and compiler settings.
+- `web/vitest.config.ts`: test alias and include pattern.
+- `supabase/config.toml`: local Supabase services and ports.
 
 **Core Logic:**
-- `gateway/internal/protocol/protocol.go`: Position model and Parser interface
-- `gateway/internal/storage/writer.go`: Batch writer and device cache
-- `gateway/internal/alerts/engine.go`: Alert rule evaluation
-- `web/src/lib/actions/`: All CRUD and queries (server actions)
-- `web/src/lib/hooks/use-realtime-positions.ts`: Real-time subscription logic
+- `gateway/internal/server/tcp.go`: socket ingest loop.
+- `gateway/internal/protocol/protocol.go`: parser abstraction.
+- `gateway/internal/storage/writer.go`: batch insert logic and device cache.
+- `gateway/internal/alerts/engine.go`: in-memory rule evaluation.
+- `web/src/lib/actions/positions.ts`: dashboard and history data fetching.
+- `web/src/lib/actions/devices.ts`: device CRUD.
+- `web/src/lib/actions/vehicles.ts`: vehicle CRUD and association.
+- `web/src/app/(dashboard)/dashboard-map.tsx`: client orchestration for the live map page.
+- `web/src/components/map/history-player.tsx`: history playback UI.
+- `supabase/migrations/20260403_latest_positions_realtime.sql`: latest-position projection for Realtime.
 
 **Testing:**
-- `gateway/internal/**/*_test.go`: Go test files in same package as code
-- `web/src/**/*.test.ts` or `.spec.ts`: Jest/Vitest tests (if present)
+- `gateway/internal/**/*_test.go`: Go package-level tests next to implementation.
+- `simulator/internal/suntech/generator_test.go`: simulator behavior tests.
+- `web/src/**/*.test.ts`: non-React helper tests such as `web/src/lib/map/position-location.test.ts`.
+- `web/src/**/*.test.tsx`: React and route tests such as `web/src/components/map/dashboard-mobile-sheet.test.tsx` and `web/src/app/(dashboard)/dashboard-map.test.tsx`.
 
 ## Naming Conventions
 
 **Files:**
-- Go: `lowercase_with_underscores.go` (e.g., `tcp.go`, `writer_test.go`)
-- TypeScript: `lowercase-with-dashes.ts` or `camelCase.ts` (mix observed, follow existing pattern in each dir)
-- React components: `PascalCase.tsx` (e.g., `TrackingMap.tsx`, `VehicleMarker.tsx`)
-- Pages: `page.tsx`, `layout.tsx`, `route.ts`
-- Server Actions: `camelCase.ts` with `"use server"` directive (e.g., `getDevices`, `createDevice`)
+- Next.js route files use framework names: `page.tsx`, `layout.tsx`, and `route.ts` in `web/src/app/`.
+- Web feature modules use kebab-case filenames such as `web/src/components/map/history-query-toolbar.tsx` and `web/src/lib/map/dashboard-map-utils.ts`.
+- Go source files use lowercase names with underscores where needed, such as `gateway/internal/protocol/suntech_binary.go`.
+- SQL migrations use timestamp-prefixed or date-prefixed filenames in `supabase/migrations/`, for example `supabase/migrations/20260318104558_rls_policies.sql`.
 
 **Directories:**
-- Go packages: `lowercase_no_spaces` (e.g., `internal/server`, `internal/storage`)
-- Next.js routes: Route groups in parentheses (e.g., `(dashboard)`, `(auth)`); segment names in lowercase (e.g., `/devices`, `/vehicles`)
-- Component directories: `lowercase` (e.g., `components/map`, `components/dashboard`)
-- Utility/lib: `lowercase` (e.g., `lib/supabase`, `lib/actions`)
+- Product feature folders are grouped by domain, not by technical layer, inside `web/src/components/` and `web/src/lib/actions/`; examples include `web/src/components/devices/` and `web/src/lib/actions/`.
+- Route groups use Next.js grouping syntax in `web/src/app/(auth)/` and `web/src/app/(dashboard)/`.
+- Go internal packages stay flat under `gateway/internal/` with one responsibility per directory: `alerts`, `config`, `metrics`, `protocol`, `server`, and `storage`.
 
 ## Where to Add New Code
 
-**New Feature (e.g., geofence trigger alerts):**
-- Primary code: 
-  - Gateway: New evaluator in `gateway/internal/alerts/engine.go` (add case to evaluateRule switch)
-  - Web: New Server Action in `web/src/lib/actions/geofences.ts` or extend existing
-  - UI: New page or component in `web/src/app/(dashboard)/geofences/` or new component
-- Tests: 
-  - Gateway: `gateway/internal/alerts/engine_test.go` (add test case)
-  - Web: Co-located `.test.ts` or in test directory (if configured)
+**New Dashboard Page:**
+- Primary code: add the route under `web/src/app/(dashboard)/<feature>/page.tsx`.
+- Shared page layout concerns: keep them in `web/src/app/(dashboard)/layout.tsx` unless the feature needs a nested layout.
+- Data fetching: create or extend a server action module in `web/src/lib/actions/<feature>.ts`.
+- UI: add page-specific widgets under `web/src/components/<feature>/`.
+- Tests: colocate route tests or component tests under the same feature path, for example `web/src/app/(dashboard)/<feature>/<name>.test.tsx` or `web/src/components/<feature>/<name>.test.tsx`.
 
-**New Component/Module:**
-- Implementation:
-  - Reusable component: `web/src/components/{feature}/ComponentName.tsx`
-  - Feature page: `web/src/app/(dashboard)/{feature}/page.tsx`
-  - Server Action: `web/src/lib/actions/{feature}.ts`
-  - Gateway protocol parser: `gateway/internal/protocol/{protocol}.go`
+**New Auth/Public Page:**
+- Implementation: add it under `web/src/app/(auth)/` when it belongs to the unauthenticated auth flow.
+- Session-related redirects: update `web/src/lib/supabase/middleware.ts` or `web/src/proxy.ts` if the route needs to bypass auth protection.
+
+**New Web Data Operation:**
+- Implementation: place the server action in `web/src/lib/actions/<domain>.ts`.
+- Tenant lookup helpers: reuse `web/src/lib/actions/utils.ts` rather than duplicating profile-to-tenant logic.
+- Supabase client construction: reuse `web/src/lib/supabase/server.ts` for server code and `web/src/lib/supabase/client.ts` for browser subscriptions.
+
+**New Map or Playback Logic:**
+- Pure calculations: place them in `web/src/lib/map/` or `web/src/lib/history/`.
+- Interactive map widgets: place them in `web/src/components/map/`.
+- Realtime subscriptions: extend `web/src/lib/hooks/use-realtime-positions.ts` or add adjacent hooks in `web/src/lib/hooks/`.
+
+**New Gateway Ingest Behavior:**
+- Protocol detection/parsing: add a parser file under `gateway/internal/protocol/` and register it in `gateway/cmd/gateway/main.go`.
+- TCP lifecycle changes: update `gateway/internal/server/tcp.go`.
+- Position persistence or device cache changes: update `gateway/internal/storage/`.
+- Alert rule logic: update `gateway/internal/alerts/`.
+- Tests: add `*_test.go` next to the package you change.
+
+**New Database Schema or Policy:**
+- Schema change: add a new SQL migration file to `supabase/migrations/`; do not edit `web/src/types/database.ts` by hand.
+- Generated app types: regenerate `web/src/types/database.ts` through the root `Makefile` target after applying migrations.
+- Seed data: keep non-schema inserts in `supabase/seed.sql`.
+
+**New Simulator Capability:**
+- CLI flags and main loop: update `simulator/cmd/simulator/main.go`.
+- Message or route generation helpers: add them under `simulator/internal/suntech/`.
 
 **Utilities:**
-- Shared helpers: `web/src/lib/utils.ts` (for small utilities) or new file `web/src/lib/{domain}/helpers.ts`
-- Go helpers: `gateway/internal/{package}/helpers.go` or in existing package file
-
-**Database Schema:**
-- New table/fields: `supabase/migrations/{timestamp}_{description}.sql`
-- Must include RLS policy for any new table with tenant data
-- Run `make db-types` after push to regenerate `web/src/types/database.ts`
+- Shared frontend helpers: `web/src/lib/utils.ts`, `web/src/lib/map/`, or `web/src/lib/history/` depending on scope.
+- Avoid creating a generic `helpers/` directory at the repo root; follow the existing per-service placement instead.
 
 ## Special Directories
 
 **`gateway/bin/`:**
-- Purpose: Compiled binaries (generated, not committed)
-- Generated: Yes (by `go build`)
-- Committed: No
+- Purpose: build output for gateway binaries.
+- Generated: Yes.
+- Committed: No.
 
 **`web/.next/`:**
-- Purpose: Next.js build output cache
-- Generated: Yes (by `npm run build` or dev server)
-- Committed: No
-
-**`web/node_modules/`:**
-- Purpose: npm dependencies
-- Generated: Yes (by `npm install`)
-- Committed: No
+- Purpose: local Next.js build and dev output.
+- Generated: Yes.
+- Committed: No.
 
 **`supabase/.temp/`:**
-- Purpose: Supabase CLI temporary files
-- Generated: Yes (by `supabase` CLI)
-- Committed: No
+- Purpose: Supabase CLI local state and cached metadata.
+- Generated: Yes.
+- Committed: No.
 
-**`docs/superpowers/`:**
-- Purpose: GSD-managed feature specs and plans
-- Structure: `specs/` (user-written requirements), `plans/` (auto-generated implementation plans with code)
-- Committed: Yes (part of workflow)
+**`web/src/types/`:**
+- Purpose: hold generated database typings consumed by the web app.
+- Generated: Partially; `web/src/types/database.ts` is generated.
+- Committed: Yes.
+
+**`.planning/codebase/`:**
+- Purpose: generated codebase reference docs for GSD workflows.
+- Generated: Yes.
+- Committed: Yes.
 
 ---
 
-*Structure analysis: 2026-04-04*
+*Structure analysis: 2026-04-05*

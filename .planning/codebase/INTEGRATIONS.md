@@ -1,196 +1,114 @@
 # External Integrations
 
-**Analysis Date:** 2026-04-04
+**Analysis Date:** 2026-04-05
 
 ## APIs & External Services
 
-**Supabase API:**
-- PostgreSQL database as a service
-  - SDK/Client: @supabase/supabase-js 2.99.2
-  - Server-side: @supabase/ssr 0.9.0
-  - Auth: NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY
-  - Service role: SUPABASE_SERVICE_ROLE_KEY (server actions only)
+**Backend Platform:**
+- Supabase - provides PostgreSQL, Auth, Realtime, and local platform services for the application
+  - SDK/Client: `@supabase/ssr`, `@supabase/supabase-js`, and Supabase CLI from `web/package.json` and `Makefile`
+  - Auth: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY` documented in `CLAUDE.md`
+  - Implementation: `web/src/lib/supabase/client.ts`, `web/src/lib/supabase/server.ts`, `web/src/lib/supabase/middleware.ts`, `web/src/lib/actions/*.ts`, and `supabase/config.toml`
 
-**GPS Device Gateway (Internal):**
-- TCP server on port 5001 receives Suntech protocol GPS data
-- Binary and ASCII protocol support via dual parsers in `gateway/internal/protocol/`
-- No external API calls; gateway reads from connected devices
+**Device Network:**
+- Suntech GPS devices - raw TCP ingestion of tracker messages into the gateway
+  - SDK/Client: custom protocol parser and registry in `gateway/internal/protocol/suntech.go`, `gateway/internal/protocol/suntech_binary.go`, and `gateway/internal/protocol/protocol.go`
+  - Auth: no external auth provider; device trust is established by IMEI/serial lookup in `gateway/internal/storage/writer.go`
+  - Implementation: `gateway/internal/server/tcp.go`, `gateway/cmd/gateway/main.go`, and `simulator/cmd/simulator/main.go`
+
+**Map Tile Providers:**
+- CARTO - light and dark basemaps for the live map UI
+  - SDK/Client: `leaflet` and `react-leaflet` from `web/package.json`
+  - Auth: none
+  - Implementation: `web/src/components/map/tracking-map.tsx`
+- OpenStreetMap tile servers - detailed street basemap
+  - SDK/Client: `leaflet` and `react-leaflet` from `web/package.json`
+  - Auth: none
+  - Implementation: `web/src/components/map/tracking-map.tsx` and `web/src/components/map/history-player.tsx`
+- Esri World Imagery - satellite basemap
+  - SDK/Client: `leaflet` and `react-leaflet` from `web/package.json`
+  - Auth: none
+  - Implementation: `web/src/components/map/tracking-map.tsx`
 
 ## Data Storage
 
 **Databases:**
-- Supabase (PostgreSQL 13+)
-  - Connection: `DATABASE_URL` environment variable
-  - ORM: Drizzle ORM 0.45.1 via `web/src/lib/db/index.ts`
-  - Driver: postgres 3.4.8 (Node.js) and jackc/pgx/v5 5.8.0 (Go)
-  - Features: PostGIS extension, Row-Level Security, time partitioning
-
-**Database Schema Components:**
-- Tenants table - Multi-tenancy foundation
-- Profiles table - User profiles linked to tenants
-- Devices table - GPS tracking devices (IMEI-based)
-- Vehicles table - Company vehicles linked to devices
-- Positions table - Partitioned by time (monthly), stores GPS coordinates as GEOMETRY
-- Latest_positions table - Non-partitioned view for Supabase Realtime
-- Geofences table - Inclusion/exclusion zones
-- Alerts table - Alert events with severity levels
-- Pending_devices table - Devices awaiting activation
-- Serial_devices table - Device serial number tracking
+- Supabase PostgreSQL 17 with PostGIS
+  - Connection: `DATABASE_URL`
+  - Client: `pgxpool` in `gateway/cmd/gateway/main.go`, `postgres` plus `drizzle` in `web/src/lib/db/index.ts`, and Supabase JS queries in `web/src/lib/actions/*.ts`
+  - Schema: `supabase/migrations/20260318104209_extensions_and_enums.sql`, `supabase/migrations/20260318104457_positions.sql`, and related migrations in `supabase/migrations/*.sql`
+- Supabase Realtime over `latest_positions`
+  - Connection: Supabase project URL from `NEXT_PUBLIC_SUPABASE_URL`
+  - Client: `.channel(...).on("postgres_changes", ...)` in `web/src/lib/hooks/use-realtime-positions.ts`
+  - Publication path: `supabase/migrations/20260403_latest_positions_realtime.sql`
 
 **File Storage:**
-- Local filesystem only (resilience buffer: `./buffer.jsonl`)
-- No S3, GCS, or cloud storage integration
+- Local filesystem fallback only in the gateway buffer
+  - Path source: `BUFFER_FALLBACK_PATH` loaded by `gateway/internal/config/config.go`
+  - Implementation: `gateway/internal/storage/buffer.go`
+- Supabase Storage is enabled in local platform config at `supabase/config.toml`, but no application code under `web/src/**` or `gateway/**` uses `supabase.storage`
 
 **Caching:**
-- None configured
-- In-memory state management via React hooks (`useRealtimePositions`)
+- None as an external service
+- In-process device cache: `gateway/internal/storage/writer.go`
+- In-memory realtime position state: `web/src/lib/hooks/use-realtime-positions.ts`
 
 ## Authentication & Identity
 
 **Auth Provider:**
-- Supabase Authentication (built-in JWT)
-  - Implementation: Middleware-based session refresh in `web/src/lib/supabase/middleware.ts`
-  - User lookup via auth.getUser() in Next.js middleware
-  - Tenant association via profiles table (auth.uid → profile.user_id → profile.tenant_id)
-
-**Auth Flow:**
-1. Login/Register via Supabase Auth endpoints
-2. Session stored in HTTP-only cookies (managed by @supabase/ssr)
-3. Middleware (`middleware.ts`) refreshes session on each request
-4. Protected routes: Redirect to /login if no valid session
-5. Public routes: /login, /register, /auth/*
-
-**Authorization:**
-- Row-Level Security (RLS) policies on all data tables
-- Two role levels: admin_platform (manage all tenants) and client (own tenant only)
-- Policies enforce tenant_id matching via get_user_tenant_id() SQL function
+- Supabase Auth
+  - Implementation: email/password login, signup, and logout in `web/src/lib/actions/auth.ts`; session refresh and route protection in `web/src/lib/supabase/middleware.ts` and `web/src/proxy.ts`; auth code exchange callback in `web/src/app/auth/callback/route.ts`
+  - Tenant/profile provisioning: `supabase/migrations/20260318104558_rls_policies.sql` creates `public.handle_new_user()` and RLS helper functions tied to `auth.uid()`
 
 ## Monitoring & Observability
 
 **Error Tracking:**
-- None (no Sentry, Datadog, etc.)
-- Structured logging via slog in Go services
-- Browser console logs in web dashboard
+- None detected
 
 **Logs:**
-- Go gateway: JSON-formatted structured logs to stdout
-- Next.js web: Console logs and browser DevTools
-- Supabase: Logs available via Supabase dashboard (not queried from app)
+- Structured JSON logs via `log/slog` in `gateway/cmd/gateway/main.go`
+- No third-party log drain, tracing SDK, or error aggregation client is detected in `gateway/**` or `web/src/**`
 
 **Metrics:**
-- Custom HTTP endpoint on port 9090
-  - /metrics - JSON metrics (active connections, positions received/flushed, alerts triggered)
-  - /health - Health check (plain JSON {status: ok})
-- No Prometheus scraping configured
-- Prometheus client: Custom in-house implementation via `gateway/internal/metrics/`
+- Gateway HTTP metrics and health endpoints at `/metrics` and `/health`
+  - Implementation: `gateway/internal/metrics/metrics.go`
+  - Exposure: started from `gateway/cmd/gateway/main.go`
 
 ## CI/CD & Deployment
 
 **Hosting:**
-- Web dashboard: Vercel (free tier) - Next.js deployment with serverless functions
-- Gateway: Oracle Cloud VPS (ubuntu@137.131.168.96) - TCP server binary on port 5001
-- Database: Supabase Cloud - Managed PostgreSQL
-- Simulator: Runs locally or on same VPS as gateway
+- Supabase hosts the managed database, auth, and realtime platform implied by `supabase/config.toml` and `web/src/lib/supabase/*.ts`
+- The gateway has a container build target in `gateway/Dockerfile`
+- The web app has no checked-in hosting manifest; it is prepared for a standard Next.js build/start flow through `web/package.json`
 
 **CI Pipeline:**
-- None detected (no GitHub Actions, GitLab CI, etc.)
-- Manual deployment via git push (Vercel) or SSH (VPS)
-
-**Deployment Artifacts:**
-- Web: Vercel builds on git push, no Docker
-- Gateway: Go binary compiled locally, SCP to VPS, systemd restart
-- Database: Supabase CLI migrations pushed manually via `supabase db push`
+- None detected
+- No `.github/workflows/*`, `vercel.json`, `.vercel/`, `netlify.toml`, `fly.toml`, or `railway.json` are present in the repository scan
 
 ## Environment Configuration
 
-**Required Environment Variables:**
+**Required env vars:**
+- Gateway runtime: `DATABASE_URL`, `TCP_PORT`, `METRICS_PORT`, `RULE_SYNC_INTERVAL`, `BUFFER_CAPACITY`, `FLUSH_INTERVAL`, `FLUSH_SIZE`, `BUFFER_FALLBACK_PATH` from `gateway/internal/config/config.go`
+- Web runtime: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, and `DATABASE_URL` from `web/src/lib/supabase/*.ts`, `web/src/lib/db/index.ts`, and `web/drizzle.config.ts`
+- Documented web secret contract: `SUPABASE_SERVICE_ROLE_KEY` in `CLAUDE.md`
+- Local Supabase-only optional secrets referenced through `env(...)` in `supabase/config.toml`: `OPENAI_API_KEY`, `SUPABASE_AUTH_SMS_TWILIO_AUTH_TOKEN`, `SUPABASE_AUTH_EXTERNAL_APPLE_SECRET`, `S3_HOST`, `S3_REGION`, `S3_ACCESS_KEY`, and `S3_SECRET_KEY`
 
-**Gateway:**
-```
-DATABASE_URL=postgresql://user:pass@host:5432/db
-TCP_PORT=5001                          # Optional, default 5001
-METRICS_PORT=9090                      # Optional, default 9090
-RULE_SYNC_INTERVAL=30s                 # Optional, default 30s
-BUFFER_CAPACITY=10000                  # Optional, default 10000
-FLUSH_INTERVAL=1s                      # Optional, default 1s
-FLUSH_SIZE=100                         # Optional, default 100
-BUFFER_FALLBACK_PATH=./buffer.jsonl    # Optional, default ./buffer.jsonl
-```
-
-**Web:**
-```
-NEXT_PUBLIC_SUPABASE_URL=https://xxx.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJxxx...
-SUPABASE_SERVICE_ROLE_KEY=eyJxxx...     # Server-side only
-DATABASE_URL=postgresql://user:pass@host:5432/db
-```
-
-**Secrets Location:**
-- Environment files (not committed): `.env` (gateway), `.env.local` (web)
-- Example files in repo: `gateway/.env.example`, `web/.env.local.example`
-- No secrets vault (AWS Secrets Manager, Vault, etc.)
+**Secrets location:**
+- `gateway/.env` and `web/.env.local` are present for local secrets
+- `gateway/.env.example` and `web/.env.local.example` are present as example config files
+- `supabase/config.toml` references additional local secrets via `env(...)` instead of inline values for optional integrations
 
 ## Webhooks & Callbacks
 
-**Incoming Webhooks:**
-- None detected
-- Gateway only receives TCP connections from devices
+**Incoming:**
+- `GET /auth/callback` in `web/src/app/auth/callback/route.ts` handles Supabase auth code exchange callbacks
+- No payment, messaging, or third-party provider webhooks are detected in `web/src/**`, `gateway/**`, or `simulator/**`
 
-**Outgoing Webhooks:**
-- None detected
-- No callbacks to external services
-- Alert records stored in database, not sent to external endpoints
-
-## Real-Time Communication
-
-**Supabase Realtime:**
-- Subscription: `channel("realtime:latest_positions")`
-- Watches: postgres_changes on `latest_positions` table
-- Implementation: `web/src/lib/hooks/use-realtime-positions.ts`
-- Event types: INSERT, UPDATE, DELETE
-- Frontend updates vehicle positions in real-time without polling
-
-**Network Protocol:**
-- TCP (binary/ASCII Suntech protocol) for device-to-gateway communication
-- WebSocket (Supabase Realtime) for browser-to-database subscriptions
-
-## Data Flow Integrations
-
-**Device → Gateway → Database:**
-1. GPS device sends TCP packet (Suntech protocol) to gateway:5001
-2. Gateway parser decodes position data (IMEI, location, speed, heading, etc.)
-3. Position buffered in memory, flushed to positions table on interval/size threshold
-4. Insert trigger updates latest_positions table (for Realtime)
-5. Alert rules evaluated in-memory, matched alerts inserted into alerts table
-
-**Dashboard → Realtime → UI:**
-1. Web dashboard subscribes to latest_positions via Supabase Realtime
-2. On new position INSERT, postgres_changes event fires
-3. React hook updates in-memory position map
-4. Components re-render with latest vehicle locations
-5. Leaflet map markers update in real-time
-
-## External Service Dependencies
-
-**Critical (Core Functionality):**
-- Supabase (PostgreSQL, Auth, Realtime) - Database, authentication, real-time sync
-- Oracle Cloud VPS - Gateway server hosting
-
-**Non-Critical:**
-- Vercel - Web hosting (can self-host Next.js)
-- Suntech GPS Device Network - Device connectivity (customer-provided)
-
-## Backup & Recovery
-
-**Database Backups:**
-- Supabase Cloud handles PostgreSQL backups automatically
-- No custom backup strategy configured
-
-**Position Data Resilience:**
-- In-memory buffer (10,000 positions default) in gateway process
-- Fallback JSONL file (`./buffer.jsonl`) if database flush fails
-- Buffer flushed on startup to catch missed inserts during downtime
+**Outgoing:**
+- The web map UI requests external tile images from CARTO, OpenStreetMap, and Esri in `web/src/components/map/tracking-map.tsx` and `web/src/components/map/history-player.tsx`
+- The web app sends authenticated data and realtime requests to Supabase through `web/src/lib/supabase/*.ts`, `web/src/lib/actions/*.ts`, and `web/src/lib/hooks/use-realtime-positions.ts`
+- The gateway writes directly to PostgreSQL and polls alert rules through `gateway/internal/storage/writer.go`, `gateway/internal/storage/pending.go`, and `gateway/internal/alerts/sync.go`
 
 ---
 
-*Integration audit: 2026-04-04*
+*Integration audit: 2026-04-05*
