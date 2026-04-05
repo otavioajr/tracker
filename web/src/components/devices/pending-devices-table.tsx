@@ -50,8 +50,11 @@ export function PendingDevicesTable({
 
   async function handleLink(pendingId: string, deviceId: string) {
     setLinking(pendingId);
-    await linkPendingDevice(pendingId, deviceId);
-    setLinking(null);
+    try {
+      await linkPendingDevice(pendingId, deviceId);
+    } finally {
+      setLinking(null);
+    }
   }
 
   async function handleDismiss(pendingId: string) {
@@ -99,7 +102,7 @@ export function PendingDevicesTable({
 
             <InfoColumn
               label="Primeira conexão"
-              value={formatDeviceLastCommunication(device.first_seen_at)}
+              value={formatDeviceTimestamp(device.first_seen_at)}
             />
             <InfoColumn
               label="Última conexão"
@@ -135,6 +138,7 @@ export function PendingDevicesTable({
                           key={candidate.id}
                           variant="outline"
                           className="w-full justify-start"
+                          disabled={linking !== null}
                           onClick={() => handleLink(device.id, candidate.id)}
                         >
                           <span className="font-mono">{candidate.imei}</span>
@@ -175,4 +179,17 @@ function InfoColumn({ label, value }: { label: string; value: string }) {
       <p className="text-sm font-medium">{value}</p>
     </div>
   );
+}
+
+function formatDeviceTimestamp(value: string): string {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "—";
+  }
+
+  return new Intl.DateTimeFormat("pt-BR", {
+    dateStyle: "short",
+    timeStyle: "short",
+  }).format(date);
 }
