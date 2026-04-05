@@ -152,8 +152,8 @@ export function DashboardMap({ initialPositions }: DashboardMapProps) {
       </div>
 
       {desktopRailOpen ? (
-        <div className="absolute inset-y-3 right-3 z-[1000] hidden items-start lg:flex">
-          <div className="flex h-full w-[22rem] flex-col overflow-hidden rounded-[28px] border border-white/10 bg-background/88 p-4 text-foreground shadow-[0_24px_48px_-24px_rgba(0,0,0,0.75)] backdrop-blur-2xl">
+        <div className="absolute right-3 bottom-20 z-[1000] hidden lg:flex">
+          <div className="flex h-[min(68vh,42rem)] max-h-[calc(100%-6rem)] w-[22rem] flex-col overflow-hidden rounded-[28px] border border-white/10 bg-background/88 p-4 text-foreground shadow-[0_24px_48px_-24px_rgba(0,0,0,0.75)] backdrop-blur-2xl">
             <div className="mb-4 flex items-start justify-between gap-3">
               <div>
                 <p className="text-sm font-semibold">Despacho em tempo real</p>
@@ -186,7 +186,7 @@ export function DashboardMap({ initialPositions }: DashboardMapProps) {
           </div>
         </div>
       ) : (
-        <div className="absolute top-1/2 right-3 z-[1000] hidden -translate-y-1/2 lg:flex">
+        <div className="absolute right-3 bottom-20 z-[1000] hidden lg:flex">
           <Button
             type="button"
             size="icon-lg"
