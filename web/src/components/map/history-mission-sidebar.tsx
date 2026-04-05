@@ -40,7 +40,7 @@ export function HistoryMissionSidebar({
   const hasResults = Boolean(summary && summary.totalPoints > 0);
 
   return (
-    <aside className="flex w-full shrink-0 flex-col gap-3 lg:sticky lg:top-4 lg:w-[22rem] lg:self-start">
+    <aside className="flex w-full shrink-0 flex-col gap-3 xl:sticky xl:top-4 xl:w-[22rem] xl:self-start">
       <Card className="gap-4 bg-card/98">
         <CardHeader className="border-b border-border/60 pb-4">
           <CardTitle>Resumo da viagem</CardTitle>
