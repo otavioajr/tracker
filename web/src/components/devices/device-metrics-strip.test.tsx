@@ -10,18 +10,19 @@ describe("DeviceMetricsStrip", () => {
     cleanup();
   });
 
-  it("renders the three approved operational metrics", () => {
+  it("renders exactly the three approved operational metrics", () => {
     render(
       <DeviceMetricsStrip
         metrics={{ total: 24, pending: 4, active: 18, unassigned: 6 }}
       />,
     );
 
+    expect(
+      screen.getAllByText(/^(Pendentes|Ativos|Sem veículo)$/),
+    ).toHaveLength(3);
     expect(screen.getByText("Pendentes")).toBeTruthy();
-    expect(screen.getByText("4")).toBeTruthy();
     expect(screen.getByText("Ativos")).toBeTruthy();
-    expect(screen.getByText("18")).toBeTruthy();
     expect(screen.getByText("Sem veículo")).toBeTruthy();
-    expect(screen.getByText("6")).toBeTruthy();
+    expect(screen.queryByText("Total")).toBeNull();
   });
 });
