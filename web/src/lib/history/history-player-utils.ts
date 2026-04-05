@@ -54,6 +54,33 @@ export function formatHistoryTimestamp(iso: string) {
   }).format(new Date(iso));
 }
 
+export function orderHistoryPositions<T extends HistoryPositionInput>(
+  positions: readonly T[]
+): T[] {
+  return [...positions].sort(
+    (left, right) =>
+      new Date(left.server_time).getTime() - new Date(right.server_time).getTime()
+  );
+}
+
+export function getHistorySearchState({
+  hasSearched,
+  loading,
+  hasResults,
+  error,
+}: {
+  hasSearched: boolean;
+  loading: boolean;
+  hasResults: boolean;
+  error: string;
+}) {
+  return {
+    beforeSearch: !hasSearched,
+    noResults: hasSearched && !loading && !hasResults && !error,
+    searchFailed: hasSearched && !loading && !hasResults && Boolean(error),
+  };
+}
+
 export function buildHistorySummary(
   positions: readonly HistoryPositionInput[]
 ): HistorySummary {

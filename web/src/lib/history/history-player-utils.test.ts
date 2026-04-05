@@ -5,7 +5,9 @@ import {
   buildRouteCoords,
   buildHistorySummary,
   formatHistoryTimestamp,
+  getHistorySearchState,
   getPlaybackIntervalMs,
+  orderHistoryPositions,
 } from "./history-player-utils";
 
 const positions = [
@@ -226,6 +228,57 @@ describe("history-player-utils", () => {
     ]);
   });
 
+  it("normalizes unsorted history once for route, playback, and highlight navigation", () => {
+    const orderedPositions = orderHistoryPositions(unsortedRouteWithStop);
+
+    expect(orderedPositions.map((position) => position.server_time)).toEqual([
+      "2026-04-05T10:00:00.000Z",
+      "2026-04-05T10:05:00.000Z",
+      "2026-04-05T10:11:00.000Z",
+      "2026-04-05T10:18:00.000Z",
+    ]);
+
+    expect(buildRouteCoords(orderedPositions)).toEqual([
+      [-23.55, -46.63],
+      [-23.551, -46.631],
+      [-23.551, -46.631],
+      [-23.552, -46.632],
+    ]);
+
+    expect(buildPlaybackTrailCoords(orderedPositions, 2)).toEqual([
+      [-23.55, -46.63],
+      [-23.551, -46.631],
+      [-23.551, -46.631],
+    ]);
+
+    expect(buildHistoryHighlights(orderedPositions)).toEqual([
+      {
+        kind: "milestone",
+        index: 0,
+        label: "Start",
+        timestamp: "2026-04-05T10:00:00.000Z",
+        latitude: -23.55,
+        longitude: -46.63,
+      },
+      {
+        kind: "stop",
+        index: 1,
+        label: "Stop 1",
+        timestamp: "2026-04-05T10:05:00.000Z",
+        latitude: -23.551,
+        longitude: -46.631,
+      },
+      {
+        kind: "milestone",
+        index: 3,
+        label: "End",
+        timestamp: "2026-04-05T10:18:00.000Z",
+        latitude: -23.552,
+        longitude: -46.632,
+      },
+    ]);
+  });
+
   it("maps all playback speed presets to fixed intervals", () => {
     expect({
       "1x": getPlaybackIntervalMs("1x"),
@@ -250,6 +303,34 @@ describe("history-player-utils", () => {
       totalDurationMinutes: 0,
     });
     expect(buildHistoryHighlights([])).toEqual([]);
+  });
+
+  it("distinguishes failed searches from empty successful results", () => {
+    expect(
+      getHistorySearchState({
+        hasSearched: true,
+        loading: false,
+        hasResults: false,
+        error: "Erro ao buscar histórico",
+      })
+    ).toEqual({
+      beforeSearch: false,
+      noResults: false,
+      searchFailed: true,
+    });
+
+    expect(
+      getHistorySearchState({
+        hasSearched: true,
+        loading: false,
+        hasResults: false,
+        error: "",
+      })
+    ).toEqual({
+      beforeSearch: false,
+      noResults: true,
+      searchFailed: false,
+    });
   });
 
   it("formats timestamps in pt-BR with a stable local output", () => {

@@ -15,7 +15,9 @@ import {
   buildPlaybackTrailCoords,
   buildRouteCoords,
   buildHistorySummary,
+  getHistorySearchState,
   getPlaybackIntervalMs,
+  orderHistoryPositions,
   type PlaybackSpeedPreset,
 } from "@/lib/history/history-player-utils";
 
@@ -126,14 +128,17 @@ export function HistoryPlayer() {
   const [fitVersion, setFitVersion] = useState(0);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  const orderedPositions = orderHistoryPositions(positions);
   const selectedVehicleLabel =
     vehicles.find((vehicle) => vehicle.id === vehicleId)?.label ?? "";
-  const summary = positions.length > 0 ? buildHistorySummary(positions) : null;
-  const highlights = positions.length > 0 ? buildHistoryHighlights(positions) : [];
-  const currentPosition = positions[currentIndex] ?? null;
-  const routeCoords = buildRouteCoords(positions);
+  const summary =
+    orderedPositions.length > 0 ? buildHistorySummary(orderedPositions) : null;
+  const highlights =
+    orderedPositions.length > 0 ? buildHistoryHighlights(orderedPositions) : [];
+  const currentPosition = orderedPositions[currentIndex] ?? null;
+  const routeCoords = buildRouteCoords(orderedPositions);
   const routeBounds = buildRouteBounds(routeCoords);
-  const playbackTrailCoords = buildPlaybackTrailCoords(positions, currentIndex);
+  const playbackTrailCoords = buildPlaybackTrailCoords(orderedPositions, currentIndex);
   const milestoneHighlights = highlights.filter((highlight) => highlight.kind === "milestone");
   const startHighlight = milestoneHighlights[0] ?? null;
   const endHighlight =
@@ -141,10 +146,13 @@ export function HistoryPlayer() {
       ? milestoneHighlights[milestoneHighlights.length - 1]
       : null;
   const stopHighlights = highlights.filter((highlight) => highlight.kind === "stop");
-  const hasResults = positions.length > 0;
-  const beforeSearch = !hasSearched;
-  const noResults = hasSearched && !loading && !hasResults && !error;
-  const searchFailed = hasSearched && !loading && !hasResults && Boolean(error);
+  const hasResults = orderedPositions.length > 0;
+  const { beforeSearch, noResults, searchFailed } = getHistorySearchState({
+    hasSearched,
+    loading,
+    hasResults,
+    error,
+  });
 
   useEffect(() => {
     let isActive = true;
@@ -188,11 +196,11 @@ export function HistoryPlayer() {
   }, []);
 
   useEffect(() => {
-    if (!playing || positions.length === 0) return;
+    if (!playing || orderedPositions.length === 0) return;
 
     intervalRef.current = setInterval(() => {
       setCurrentIndex((prev) => {
-        if (prev >= positions.length - 1) {
+        if (prev >= orderedPositions.length - 1) {
           setPlaying(false);
           return prev;
         }
@@ -205,7 +213,7 @@ export function HistoryPlayer() {
         clearInterval(intervalRef.current);
       }
     };
-  }, [playing, positions.length, playbackSpeed]);
+  }, [orderedPositions.length, playing, playbackSpeed]);
 
   async function handleSearch() {
     if (!vehicleId || !startDate || !endDate) {
@@ -237,8 +245,8 @@ export function HistoryPlayer() {
   }
 
   function handlePlay() {
-    if (positions.length === 0) return;
-    if (currentIndex >= positions.length - 1) setCurrentIndex(0);
+    if (orderedPositions.length === 0) return;
+    if (currentIndex >= orderedPositions.length - 1) setCurrentIndex(0);
     setPlaying(true);
   }
 
@@ -257,7 +265,7 @@ export function HistoryPlayer() {
   }
 
   function handleHighlightSelect(index: number) {
-    if (index < 0 || index >= positions.length) return;
+    if (index < 0 || index >= orderedPositions.length) return;
     setPlaying(false);
     setCurrentIndex(index);
   }
@@ -430,7 +438,7 @@ export function HistoryPlayer() {
         <HistoryPlaybackBar
           playing={playing}
           currentIndex={currentIndex}
-          totalPoints={positions.length}
+          totalPoints={orderedPositions.length}
           speed={playbackSpeed}
           currentTimestamp={currentPosition?.server_time ?? null}
           onPlay={handlePlay}
@@ -447,6 +455,7 @@ export function HistoryPlayer() {
         currentPosition={currentPosition}
         loading={loading}
         hasSearched={hasSearched}
+        searchFailed={searchFailed}
         onHighlightSelect={handleHighlightSelect}
       />
     </div>

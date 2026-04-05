@@ -24,6 +24,7 @@ type HistoryMissionSidebarProps = {
   currentPosition: VehiclePosition | null;
   loading: boolean;
   hasSearched: boolean;
+  searchFailed: boolean;
   onHighlightSelect: (index: number) => void;
 };
 
@@ -33,10 +34,12 @@ export function HistoryMissionSidebar({
   currentPosition,
   loading,
   hasSearched,
+  searchFailed,
   onHighlightSelect,
 }: HistoryMissionSidebarProps) {
   const beforeSearch = !hasSearched;
-  const noResults = hasSearched && !loading && (!summary || summary.totalPoints === 0);
+  const noResults =
+    hasSearched && !loading && !searchFailed && (!summary || summary.totalPoints === 0);
 
   return (
     <aside className="flex w-full shrink-0 flex-col gap-3 xl:sticky xl:top-4 xl:w-[22rem] xl:self-start">
@@ -54,6 +57,11 @@ export function HistoryMissionSidebar({
             </SidebarMessage>
           ) : loading ? (
             <SummaryLoadingState />
+          ) : searchFailed ? (
+            <SidebarMessage>
+              A consulta falhou. Revise os filtros e tente novamente. O detalhe do erro fica
+              disponível na barra de consulta.
+            </SidebarMessage>
           ) : noResults ? (
             <SidebarMessage>
               Nenhum trajeto encontrado no período consultado.
@@ -100,6 +108,10 @@ export function HistoryMissionSidebar({
             </SidebarMessage>
           ) : loading ? (
             <ListLoadingState />
+          ) : searchFailed ? (
+            <SidebarMessage>
+              Os destaques não ficaram disponíveis porque a busca falhou.
+            </SidebarMessage>
           ) : noResults ? (
             <SidebarMessage>Sem destaques para este período.</SidebarMessage>
           ) : highlights.length === 0 ? (
@@ -154,6 +166,10 @@ export function HistoryMissionSidebar({
             </SidebarMessage>
           ) : loading ? (
             <CurrentPointLoadingState />
+          ) : searchFailed ? (
+            <SidebarMessage>
+              Nenhum ponto pôde ser carregado porque a busca falhou.
+            </SidebarMessage>
           ) : noResults ? (
             <SidebarMessage>Nenhum ponto disponível para inspeção.</SidebarMessage>
           ) : currentPosition ? (
