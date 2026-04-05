@@ -1,0 +1,32 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e29]:
+    - generic [ref=e30]:
+      - generic [ref=e31]: Criar Conta
+      - generic [ref=e32]: Preencha seus dados para se registrar
+    - generic [ref=e34]:
+      - generic [ref=e51]: Email address "codex-debug@example.com" is invalid
+      - generic [ref=e35]:
+        - generic [ref=e36]: Nome completo
+        - textbox "Nome completo" [ref=e37]:
+          - /placeholder: Seu nome
+      - generic [ref=e38]:
+        - generic [ref=e39]: E-mail
+        - textbox "E-mail" [ref=e40]:
+          - /placeholder: seu@email.com
+      - generic [ref=e41]:
+        - generic [ref=e42]: Senha
+        - textbox "Senha" [ref=e43]:
+          - /placeholder: "********"
+      - generic [ref=e44]:
+        - generic [ref=e45]: ID do Tenant
+        - textbox "ID do Tenant" [ref=e46]:
+          - /placeholder: Fornecido pelo administrador
+        - paragraph [ref=e47]: Solicite este ID ao administrador da plataforma.
+      - button "Criar conta" [ref=e48]
+      - paragraph [ref=e49]:
+        - text: Ja tem conta?
+        - link "Entrar" [ref=e50] [cursor=pointer]:
+          - /url: /login
+  - button "Open Next.js Dev Tools" [ref=e24] [cursor=pointer]:
+    - img [ref=e25]
+  - alert [ref=e28]

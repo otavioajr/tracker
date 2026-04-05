@@ -1,0 +1,95 @@
+- generic [ref=e1]:
+  - generic [ref=e2]:
+    - generic [ref=e3]:
+      - banner [ref=e4]:
+        - generic [ref=e6]: ● Tracker
+        - generic [ref=e8]: T
+      - main [ref=e9]:
+        - generic [ref=e11]:
+          - generic [ref=e74]:
+            - button [ref=e75] [cursor=pointer]:
+              - img [ref=e76]
+            - button [ref=e82] [cursor=pointer]:
+              - img [ref=e83]
+            - generic [ref=e89]:
+              - button [ref=e102] [cursor=pointer]: +
+              - button [ref=e103] [cursor=pointer]: −
+            - button [ref=e104] [cursor=pointer]
+            - generic [ref=e94]:
+              - link [ref=e105] [cursor=pointer]:
+                - /url: https://leafletjs.com
+                - img [ref=e96]
+                - text: Leaflet
+              - text: "| ©"
+              - link [ref=e106] [cursor=pointer]:
+                - /url: https://carto.com/
+                - text: CARTO
+          - button [ref=e107]:
+            - img [ref=e14]
+            - text: Ver todos
+          - generic:
+            - generic: 2 veículos
+          - generic [ref=e17]:
+            - generic [ref=e18]:
+              - button [ref=e108]:
+                - generic [ref=e21]: Alternar painel
+              - generic [ref=e22]:
+                - generic [ref=e23]:
+                  - paragraph [ref=e24]: 2 veículos
+                  - paragraph [ref=e25]: 2 veículos visíveis
+                - generic [ref=e26]:
+                  - button [ref=e109]:
+                    - img
+                  - button [ref=e110]:
+                    - img
+            - generic [ref=e30]: Toque para abrir a lista de veículos.
+    - navigation [ref=e31]:
+      - generic [ref=e33]:
+        - link [ref=e111] [cursor=pointer]:
+          - /url: /
+          - img [ref=e36]
+          - generic [ref=e38]: Mapa
+        - link [ref=e112] [cursor=pointer]:
+          - /url: /vehicles
+          - img [ref=e41]
+          - generic [ref=e45]: Frota
+        - link [ref=e113] [cursor=pointer]:
+          - /url: /history
+          - img [ref=e48]
+          - generic [ref=e51]: Histórico
+        - link [ref=e114] [cursor=pointer]:
+          - /url: /alerts
+          - img [ref=e54]
+          - generic [ref=e57]: Alertas
+        - button [ref=e115]:
+          - img [ref=e60]
+          - generic [ref=e64]: Mais
+  - button "Open Next.js Dev Tools" [ref=e70] [cursor=pointer]:
+    - img [ref=e71]
+  - alert [ref=e101]
+  - dialog "Mais opções" [ref=e119]:
+    - heading "Mais opções" [level=2] [ref=e122]
+    - generic [ref=e123]:
+      - link "Dispositivos Gerenciar rastreadores" [active] [ref=e124] [cursor=pointer]:
+        - /url: /devices
+        - img [ref=e126]
+        - generic [ref=e129]:
+          - generic [ref=e130]: Dispositivos
+          - generic [ref=e131]: Gerenciar rastreadores
+      - link "Geocercas Áreas monitoradas" [ref=e132] [cursor=pointer]:
+        - /url: /geofences
+        - img [ref=e134]
+        - generic [ref=e137]:
+          - generic [ref=e138]: Geocercas
+          - generic [ref=e139]: Áreas monitoradas
+      - link "Relatórios Dados e exportações" [ref=e140] [cursor=pointer]:
+        - /url: /reports
+        - img [ref=e142]
+        - generic [ref=e145]:
+          - generic [ref=e146]: Relatórios
+          - generic [ref=e147]: Dados e exportações
+    - button "Sair Encerrar sessão" [ref=e150]:
+      - img [ref=e152]
+      - generic [ref=e155]:
+        - generic [ref=e156]: Sair
+        - generic [ref=e157]: Encerrar sessão

@@ -1,0 +1,51 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - generic [ref=e3]:
+      - banner [ref=e4]:
+        - generic [ref=e6]: ● Tracker
+        - generic [ref=e8]: T
+      - main [ref=e9]:
+        - generic [ref=e11]:
+          - generic [ref=e12]: Carregando mapa...
+          - button "Ver todos" [ref=e13]:
+            - img [ref=e14]
+            - text: Ver todos
+          - generic:
+            - generic: 2 veículos
+          - generic [ref=e17]:
+            - generic [ref=e18]:
+              - button "Expandir lista de veículos" [ref=e19]:
+                - generic [ref=e21]: Alternar painel
+              - generic [ref=e22]:
+                - generic [ref=e23]:
+                  - paragraph [ref=e24]: 2 veículos
+                  - paragraph [ref=e25]: 2 veículos visíveis
+                - generic [ref=e26]:
+                  - button "Mostrar resumo da lista de veículos" [ref=e27]:
+                    - img
+                  - button "Expandir lista de veículos" [ref=e28]:
+                    - img
+            - generic [ref=e30]: Toque para abrir a lista de veículos.
+    - navigation [ref=e31]:
+      - generic [ref=e33]:
+        - link "Mapa" [ref=e34] [cursor=pointer]:
+          - /url: /
+          - img [ref=e36]
+          - generic [ref=e38]: Mapa
+        - link "Frota" [ref=e39] [cursor=pointer]:
+          - /url: /vehicles
+          - img [ref=e41]
+          - generic [ref=e45]: Frota
+        - link "Histórico" [ref=e46] [cursor=pointer]:
+          - /url: /history
+          - img [ref=e48]
+          - generic [ref=e51]: Histórico
+        - link "Alertas" [ref=e52] [cursor=pointer]:
+          - /url: /alerts
+          - img [ref=e54]
+          - generic [ref=e57]: Alertas
+        - button "Mais" [ref=e58]:
+          - img [ref=e60]
+          - generic [ref=e64]: Mais
+  - button "Open Next.js Dev Tools" [ref=e70] [cursor=pointer]:
+    - img [ref=e71]

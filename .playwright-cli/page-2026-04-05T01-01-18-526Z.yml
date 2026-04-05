@@ -1,0 +1,22 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e4]:
+    - generic [ref=e5]:
+      - generic [ref=e6]: Tracker
+      - generic [ref=e7]: Entre com suas credenciais
+    - generic [ref=e9]:
+      - generic [ref=e10]:
+        - generic [ref=e11]: E-mail
+        - textbox "E-mail" [ref=e12]:
+          - /placeholder: seu@email.com
+      - generic [ref=e13]:
+        - generic [ref=e14]: Senha
+        - textbox "Senha" [ref=e15]:
+          - /placeholder: "********"
+      - button "Entrar" [ref=e16]
+      - paragraph [ref=e17]:
+        - text: Sem conta?
+        - link "Registre-se" [ref=e18] [cursor=pointer]:
+          - /url: /register
+  - button "Open Next.js Dev Tools" [ref=e24] [cursor=pointer]:
+    - img [ref=e25]
+  - alert [ref=e28]
