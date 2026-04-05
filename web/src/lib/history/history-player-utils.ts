@@ -108,7 +108,12 @@ export function buildHistorySummary(
     const next = orderedPositions[index + 1];
     if (!next) continue;
 
-    totalDistanceKm += haversineDistanceKm(current.position, next.position);
+    if (
+      !isInStopSpeedBand(current.position.speed) ||
+      !isInStopSpeedBand(next.position.speed)
+    ) {
+      totalDistanceKm += haversineDistanceKm(current.position, next.position);
+    }
 
     const intervalMinutes =
       (new Date(next.position.server_time).getTime() -
@@ -117,7 +122,7 @@ export function buildHistorySummary(
 
     if (intervalMinutes <= 0) continue;
 
-    if ((current.position.speed ?? 0) <= STOP_SPEED_THRESHOLD_KMH) {
+    if (isInStopSpeedBand(current.position.speed)) {
       stoppedMinutes += intervalMinutes;
     } else {
       movingMinutes += intervalMinutes;
@@ -164,7 +169,7 @@ export function buildHistoryHighlights(
   for (let index = 0; index < orderedPositions.length; index += 1) {
     const current = orderedPositions[index];
     const next = orderedPositions[index + 1];
-    const currentIsStopped = (current.position.speed ?? 0) <= STOP_SPEED_THRESHOLD_KMH;
+    const currentIsStopped = isInStopSpeedBand(current.position.speed);
 
     if (currentIsStopped && stopSequenceStartIndex === null) {
       stopSequenceStartIndex = index;
@@ -189,7 +194,7 @@ export function buildHistoryHighlights(
       // Sparse telemetry can skip the exact transition point, so let the first
       // moving resume frame close the stop window when it appears.
       const stopEnd =
-        next && (next.position.speed ?? 0) > STOP_SPEED_THRESHOLD_KMH
+        next && !isInStopSpeedBand(next.position.speed)
           ? next
           : orderedPositions[stopEndIndex];
       const stopDurationMinutes =
@@ -228,6 +233,10 @@ export function buildHistoryHighlights(
   }
 
   return highlights;
+}
+
+function isInStopSpeedBand(speed: number | null | undefined) {
+  return (speed ?? 0) <= STOP_SPEED_THRESHOLD_KMH;
 }
 
 export function buildRouteCoords(

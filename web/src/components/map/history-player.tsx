@@ -1,7 +1,7 @@
 "use client";
 
 import "leaflet/dist/leaflet.css";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import type { DivIcon } from "leaflet";
 import { HistoryMapSummaryStrip } from "@/components/map/history-map-summary-strip";
@@ -128,24 +128,50 @@ export function HistoryPlayer() {
   const [fitVersion, setFitVersion] = useState(0);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const orderedPositions = orderHistoryPositions(positions);
+  const routeData = useMemo(() => {
+    const orderedPositions = orderHistoryPositions(positions);
+    const summary =
+      orderedPositions.length > 0 ? buildHistorySummary(orderedPositions) : null;
+    const highlights =
+      orderedPositions.length > 0 ? buildHistoryHighlights(orderedPositions) : [];
+    const routeCoords = buildRouteCoords(orderedPositions);
+    const routeBounds = buildRouteBounds(routeCoords);
+    const milestoneHighlights = highlights.filter(
+      (highlight) => highlight.kind === "milestone"
+    );
+
+    return {
+      orderedPositions,
+      summary,
+      highlights,
+      routeCoords,
+      routeBounds,
+      stopHighlights: highlights.filter((highlight) => highlight.kind === "stop"),
+      startHighlight: milestoneHighlights[0] ?? null,
+      endHighlight:
+        milestoneHighlights.length > 1
+          ? milestoneHighlights[milestoneHighlights.length - 1]
+          : null,
+    };
+  }, [positions]);
+
+  const {
+    orderedPositions,
+    summary,
+    highlights,
+    routeCoords,
+    routeBounds,
+    stopHighlights,
+    startHighlight,
+    endHighlight,
+  } = routeData;
   const selectedVehicleLabel =
     vehicles.find((vehicle) => vehicle.id === vehicleId)?.label ?? "";
-  const summary =
-    orderedPositions.length > 0 ? buildHistorySummary(orderedPositions) : null;
-  const highlights =
-    orderedPositions.length > 0 ? buildHistoryHighlights(orderedPositions) : [];
   const currentPosition = orderedPositions[currentIndex] ?? null;
-  const routeCoords = buildRouteCoords(orderedPositions);
-  const routeBounds = buildRouteBounds(routeCoords);
-  const playbackTrailCoords = buildPlaybackTrailCoords(orderedPositions, currentIndex);
-  const milestoneHighlights = highlights.filter((highlight) => highlight.kind === "milestone");
-  const startHighlight = milestoneHighlights[0] ?? null;
-  const endHighlight =
-    milestoneHighlights.length > 1
-      ? milestoneHighlights[milestoneHighlights.length - 1]
-      : null;
-  const stopHighlights = highlights.filter((highlight) => highlight.kind === "stop");
+  const playbackTrailCoords = useMemo(
+    () => buildPlaybackTrailCoords(orderedPositions, currentIndex),
+    [orderedPositions, currentIndex]
+  );
   const hasResults = orderedPositions.length > 0;
   const { beforeSearch, noResults, searchFailed } = getHistorySearchState({
     hasSearched,

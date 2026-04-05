@@ -118,6 +118,36 @@ const sparseStopRoute = [
   },
 ];
 
+const stopBandJitterRoute = [
+  {
+    device_id: "device-4",
+    latitude: -23.55,
+    longitude: -46.63,
+    heading: 0,
+    speed: 0,
+    ignition: false,
+    server_time: "2026-04-05T10:00:00.000Z",
+  },
+  {
+    device_id: "device-4",
+    latitude: -23.5502,
+    longitude: -46.6302,
+    heading: 0,
+    speed: 1,
+    ignition: false,
+    server_time: "2026-04-05T10:05:00.000Z",
+  },
+  {
+    device_id: "device-4",
+    latitude: -23.551,
+    longitude: -46.631,
+    heading: 45,
+    speed: 26,
+    ignition: true,
+    server_time: "2026-04-05T10:10:00.000Z",
+  },
+] as const;
+
 const unsortedRouteWithStop = [
   routeWithStop[3],
   routeWithStop[1],
@@ -179,6 +209,15 @@ describe("history-player-utils", () => {
       latitude: -23.551,
       longitude: -46.631,
     });
+  });
+
+  it("does not add stop-band jitter to total trip distance", () => {
+    const summary = buildHistorySummary(stopBandJitterRoute);
+
+    expect(summary.totalPoints).toBe(3);
+    expect(summary.stoppedMinutes).toBe(10);
+    expect(summary.movingMinutes).toBe(0);
+    expect(summary.totalDistanceKm).toBeCloseTo(0.120677276, 6);
   });
 
   it("preserves original highlight indexes even when input order is unsorted", () => {
