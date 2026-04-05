@@ -37,7 +37,6 @@ export function HistoryMissionSidebar({
 }: HistoryMissionSidebarProps) {
   const beforeSearch = !hasSearched;
   const noResults = hasSearched && !loading && (!summary || summary.totalPoints === 0);
-  const hasResults = Boolean(summary && summary.totalPoints > 0);
 
   return (
     <aside className="flex w-full shrink-0 flex-col gap-3 xl:sticky xl:top-4 xl:w-[22rem] xl:self-start">
@@ -59,7 +58,7 @@ export function HistoryMissionSidebar({
             <SidebarMessage>
               Nenhum trajeto encontrado no período consultado.
             </SidebarMessage>
-          ) : hasResults ? (
+          ) : summary ? (
             <div className="space-y-4">
               <div className="rounded-xl border border-border/60 bg-background/70 p-4">
                 <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">

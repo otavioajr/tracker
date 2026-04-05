@@ -46,7 +46,7 @@ export function HistoryQueryToolbar({
             <label className="text-sm font-medium text-muted-foreground">
               Veículo
             </label>
-            <Select value={vehicleId} onValueChange={onVehicleChange}>
+            <Select value={vehicleId} onValueChange={(value) => onVehicleChange(value ?? "")}>
               <SelectTrigger
                 size="default"
                 className="h-9 w-full rounded-lg bg-background"

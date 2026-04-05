@@ -107,6 +107,8 @@ type VehicleOption = {
   label: string;
 };
 
+type RouteBounds = [[number, number], [number, number]];
+
 export function HistoryPlayer() {
   const [mounted, setMounted] = useState(false);
   const [historyIcon, setHistoryIcon] = useState<DivIcon | null>(null);
@@ -130,8 +132,19 @@ export function HistoryPlayer() {
   const highlights = positions.length > 0 ? buildHistoryHighlights(positions) : [];
   const currentPosition = positions[currentIndex] ?? null;
   const routeCoords = buildRouteCoords(positions);
+  const routeBounds = buildRouteBounds(routeCoords);
   const playbackTrailCoords = buildPlaybackTrailCoords(positions, currentIndex);
+  const milestoneHighlights = highlights.filter((highlight) => highlight.kind === "milestone");
+  const startHighlight = milestoneHighlights[0] ?? null;
+  const endHighlight =
+    milestoneHighlights.length > 1
+      ? milestoneHighlights[milestoneHighlights.length - 1]
+      : null;
   const stopHighlights = highlights.filter((highlight) => highlight.kind === "stop");
+  const hasResults = positions.length > 0;
+  const beforeSearch = !hasSearched;
+  const noResults = hasSearched && !loading && !hasResults && !error;
+  const searchFailed = hasSearched && !loading && !hasResults && Boolean(error);
 
   useEffect(() => {
     let isActive = true;
@@ -212,9 +225,7 @@ export function HistoryPlayer() {
       const end = new Date(endDate).toISOString();
       const data = await getPositionHistory(vehicleId, start, end);
       setPositions(data);
-      if (data.length === 0) {
-        setError("Nenhuma posição encontrada no período");
-      } else {
+      if (data.length > 0) {
         setFitVersion((currentVersion) => currentVersion + 1);
       }
     } catch {
@@ -275,20 +286,30 @@ export function HistoryPlayer() {
           ) : null}
 
           {!mounted ? (
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                background: "#f3f4f6",
-                height: "100%",
-                minHeight: 420,
-                color: "#6b7280",
-                fontSize: 14,
-              }}
-            >
-              Carregando mapa...
-            </div>
+            <MapShellLoadingState label="Preparando mapa..." />
+          ) : loading ? (
+            <MapShellLoadingState label="Carregando rota..." />
+          ) : !hasResults ? (
+            <MapShellEmptyState
+              title={
+                beforeSearch
+                  ? "Pronto para carregar a missão"
+                  : noResults
+                    ? "Nenhuma rota encontrada"
+                    : searchFailed
+                      ? "A rota não pôde ser carregada"
+                      : "Pronto para uma nova consulta"
+              }
+              description={
+                beforeSearch
+                  ? "Escolha um veículo e um intervalo para visualizar o trajeto completo no mapa."
+                  : noResults
+                    ? "Ajuste o período consultado para buscar outro trecho com telemetria."
+                    : searchFailed
+                      ? "Revise os filtros e tente novamente. O detalhe do erro fica disponível na barra de consulta."
+                      : "Use a barra de consulta para carregar outro trecho no mapa."
+              }
+            />
           ) : (
             <MapContainer
               center={currentPosition ? [currentPosition.latitude, currentPosition.longitude] : SAO_PAULO}
@@ -323,13 +344,12 @@ export function HistoryPlayer() {
               </LayersControl>
 
               <HistoryMapControllerDynamic
-                key={fitVersion}
                 center={
                   currentPosition
                     ? [currentPosition.latitude, currentPosition.longitude]
                     : null
                 }
-                routeCoords={routeCoords}
+                bounds={routeBounds}
                 fitVersion={fitVersion}
               />
 
@@ -346,6 +366,38 @@ export function HistoryPlayer() {
                 />
               ) : null}
 
+              {startHighlight ? (
+                <CircleMarkerDynamic
+                  center={[startHighlight.latitude, startHighlight.longitude]}
+                  radius={currentIndex === startHighlight.index ? 8 : 6}
+                  pathOptions={{
+                    color: "#15803d",
+                    fillColor: "#22c55e",
+                    fillOpacity: 0.9,
+                    weight: 2,
+                  }}
+                  eventHandlers={{
+                    click: () => handleHighlightSelect(startHighlight.index),
+                  }}
+                />
+              ) : null}
+
+              {endHighlight ? (
+                <CircleMarkerDynamic
+                  center={[endHighlight.latitude, endHighlight.longitude]}
+                  radius={currentIndex === endHighlight.index ? 8 : 6}
+                  pathOptions={{
+                    color: "#b91c1c",
+                    fillColor: "#f87171",
+                    fillOpacity: 0.9,
+                    weight: 2,
+                  }}
+                  eventHandlers={{
+                    click: () => handleHighlightSelect(endHighlight.index),
+                  }}
+                />
+              ) : null}
+
               {stopHighlights.map((highlight) => (
                 <CircleMarkerDynamic
                   key={`${highlight.kind}-${highlight.index}-${highlight.timestamp}`}
@@ -353,8 +405,8 @@ export function HistoryPlayer() {
                   radius={currentIndex === highlight.index ? 8 : 6}
                   pathOptions={{
                     color: "#f59e0b",
-                    fillColor: "#f59e0b",
-                    fillOpacity: 0.9,
+                    fillColor: "#fbbf24",
+                    fillOpacity: 0.85,
                     weight: 2,
                   }}
                   eventHandlers={{
@@ -399,4 +451,68 @@ export function HistoryPlayer() {
       />
     </div>
   );
+}
+
+function MapShellLoadingState({ label }: { label: string }) {
+  return (
+    <div className="flex min-h-[420px] flex-col justify-center gap-4 bg-muted/25 px-5 py-6">
+      <div className="space-y-3">
+        <div className="h-4 w-32 animate-pulse rounded-full bg-muted" />
+        <div className="h-8 w-56 animate-pulse rounded-full bg-muted/80" />
+      </div>
+      <div className="grid gap-3 md:grid-cols-[minmax(0,1.5fr)_minmax(0,0.9fr)]">
+        <div className="h-56 animate-pulse rounded-2xl border border-border/60 bg-background/80" />
+        <div className="space-y-3">
+          <div className="h-24 animate-pulse rounded-2xl border border-border/60 bg-background/80" />
+          <div className="h-24 animate-pulse rounded-2xl border border-border/60 bg-background/70" />
+        </div>
+      </div>
+      <p className="text-sm text-muted-foreground">{label}</p>
+    </div>
+  );
+}
+
+function MapShellEmptyState({
+  title,
+  description,
+}: {
+  title: string;
+  description: string;
+}) {
+  return (
+    <div className="flex min-h-[420px] items-center justify-center bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.12),transparent_34%),linear-gradient(180deg,rgba(148,163,184,0.08),rgba(148,163,184,0.02))] px-5 py-6">
+      <div className="max-w-md rounded-2xl border border-dashed border-border/70 bg-background/78 p-6 shadow-sm backdrop-blur">
+        <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+          Mission map
+        </p>
+        <h3 className="mt-3 text-xl font-semibold tracking-tight text-foreground">
+          {title}
+        </h3>
+        <p className="mt-2 text-sm leading-6 text-muted-foreground">{description}</p>
+      </div>
+    </div>
+  );
+}
+
+function buildRouteBounds(routeCoords: [number, number][]): RouteBounds | null {
+  if (routeCoords.length === 0) {
+    return null;
+  }
+
+  let minLatitude = routeCoords[0][0];
+  let maxLatitude = routeCoords[0][0];
+  let minLongitude = routeCoords[0][1];
+  let maxLongitude = routeCoords[0][1];
+
+  for (const [latitude, longitude] of routeCoords) {
+    minLatitude = Math.min(minLatitude, latitude);
+    maxLatitude = Math.max(maxLatitude, latitude);
+    minLongitude = Math.min(minLongitude, longitude);
+    maxLongitude = Math.max(maxLongitude, longitude);
+  }
+
+  return [
+    [minLatitude, minLongitude],
+    [maxLatitude, maxLongitude],
+  ];
 }
