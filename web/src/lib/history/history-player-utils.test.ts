@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildHistoryHighlights,
   buildHistorySummary,
+  formatHistoryTimestamp,
   getPlaybackIntervalMs,
 } from "./history-player-utils";
 
@@ -163,7 +164,7 @@ describe("history-player-utils", () => {
     ]);
   });
 
-  it("counts sparse stops until movement resumes", () => {
+  it("counts sparse stops until the moving resume frame closes the window", () => {
     const highlights = buildHistoryHighlights(sparseStopRoute);
 
     expect(highlights).toContainEqual({
@@ -231,5 +232,11 @@ describe("history-player-utils", () => {
       totalDurationMinutes: 0,
     });
     expect(buildHistoryHighlights([])).toEqual([]);
+  });
+
+  it("formats timestamps in pt-BR with a stable local output", () => {
+    expect(formatHistoryTimestamp("2026-04-05T10:00:00.000Z")).toBe(
+      "05/04/2026, 07:00"
+    );
   });
 });

@@ -158,6 +158,8 @@ export function buildHistoryHighlights(
       }
 
       const stopStart = orderedPositions[stopStartIndex];
+      // Sparse telemetry can skip the exact transition point, so let the first
+      // moving resume frame close the stop window when it appears.
       const stopEnd =
         next && (next.position.speed ?? 0) > STOP_SPEED_THRESHOLD_KMH
           ? next
