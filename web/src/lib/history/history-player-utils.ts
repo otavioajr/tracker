@@ -139,7 +139,10 @@ export function buildHistoryHighlights(
 
     if (stopSequenceEnds) {
       const stopStart = orderedPositions[stopSequenceStartIndex];
-      const stopEnd = orderedPositions[stopSequenceEndIndex ?? stopSequenceStartIndex];
+      const stopEnd =
+        next && (next.speed ?? 0) > STOP_SPEED_THRESHOLD_KMH
+          ? next
+          : orderedPositions[stopSequenceEndIndex ?? stopSequenceStartIndex];
       const stopDurationMinutes =
         (new Date(stopEnd.server_time).getTime() - new Date(stopStart.server_time).getTime()) *
         MINUTES_PER_MS;

@@ -74,6 +74,45 @@ const routeWithStop = [
   },
 ];
 
+const sparseStopRoute = [
+  {
+    device_id: "device-3",
+    latitude: -23.55,
+    longitude: -46.63,
+    heading: 0,
+    speed: 35,
+    ignition: true,
+    server_time: "2026-04-05T10:00:00.000Z",
+  },
+  {
+    device_id: "device-3",
+    latitude: -23.551,
+    longitude: -46.631,
+    heading: 0,
+    speed: 0,
+    ignition: true,
+    server_time: "2026-04-05T10:05:00.000Z",
+  },
+  {
+    device_id: "device-3",
+    latitude: -23.5512,
+    longitude: -46.6312,
+    heading: 0,
+    speed: 0,
+    ignition: true,
+    server_time: "2026-04-05T10:09:00.000Z",
+  },
+  {
+    device_id: "device-3",
+    latitude: -23.552,
+    longitude: -46.632,
+    heading: 90,
+    speed: 28,
+    ignition: true,
+    server_time: "2026-04-05T10:20:00.000Z",
+  },
+];
+
 describe("history-player-utils", () => {
   it("builds the trip summary", () => {
     const summary = buildHistorySummary(positions);
@@ -115,6 +154,19 @@ describe("history-player-utils", () => {
         longitude: -46.632,
       },
     ]);
+  });
+
+  it("counts sparse stops until movement resumes", () => {
+    const highlights = buildHistoryHighlights(sparseStopRoute);
+
+    expect(highlights).toContainEqual({
+      kind: "stop",
+      index: 1,
+      label: "Stop 1",
+      timestamp: "2026-04-05T10:05:00.000Z",
+      latitude: -23.551,
+      longitude: -46.631,
+    });
   });
 
   it("maps all playback speed presets to fixed intervals", () => {
