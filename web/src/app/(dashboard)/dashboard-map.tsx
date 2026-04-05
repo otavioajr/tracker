@@ -49,13 +49,13 @@ export function DashboardMap({ initialPositions }: DashboardMapProps) {
     useState<DashboardVehicleFilter>("all");
   const [desktopRailOpen, setDesktopRailOpen] = useState(true);
   const [mobileSheetState, setMobileSheetState] =
-    useState<DashboardMobileSheetState>("peek");
+    useState<DashboardMobileSheetState>("collapsed");
   const [fitAllTrigger, setFitAllTrigger] = useState(0);
 
   const handleSelectVehicle = useCallback((deviceId: string) => {
     setSelectedDeviceId(deviceId);
     setFollowedDeviceId(deviceId);
-    setMobileSheetState("peek");
+    setMobileSheetState("collapsed");
   }, []);
 
   const handleCancelFollow = useCallback(() => {
@@ -63,7 +63,9 @@ export function DashboardMap({ initialPositions }: DashboardMapProps) {
   }, []);
 
   const handleFitAll = useCallback(() => {
+    setSelectedDeviceId(null);
     setFollowedDeviceId(null);
+    setMobileSheetState("collapsed");
     setFitAllTrigger((prev) => prev + 1);
   }, []);
 

@@ -73,6 +73,10 @@ describe("DashboardMap", () => {
     cleanup();
   });
 
+  function getMobileSheet() {
+    return document.querySelector("[data-state]") as HTMLElement | null;
+  }
+
   async function clickVehicleFromBrowser(label: string) {
     const matches = await screen.findAllByRole("button", {
       name: new RegExp(`selecionar ${label}`, "i"),
@@ -89,6 +93,7 @@ describe("DashboardMap", () => {
     expect(screen.getByText("Seguindo agora")).toBeTruthy();
     expect(await screen.findByText("followed:truck-1")).toBeTruthy();
     expect(await screen.findByText("selected:truck-1")).toBeTruthy();
+    expect(getMobileSheet()?.dataset.state).toBe("collapsed");
   });
 
   it("keeps the selected vehicle when follow is cancelled and syncs marker selection", async () => {
@@ -107,5 +112,23 @@ describe("DashboardMap", () => {
     expect(screen.queryByText("Seguindo agora")).toBeNull();
     expect(await screen.findByText("followed:none")).toBeTruthy();
     expect(await screen.findByText("selected:van-2")).toBeTruthy();
+  });
+
+  it("starts collapsed on mobile and clears the last selection when fitting all vehicles", async () => {
+    render(<DashboardMap initialPositions={positions} />);
+
+    expect(getMobileSheet()?.dataset.state).toBe("collapsed");
+    expect(screen.getByText("2 veículos")).toBeTruthy();
+
+    await clickVehicleFromBrowser("Truck 01");
+
+    expect(await screen.findByText("selected:truck-1")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Ver todos" }));
+
+    expect(await screen.findByText("followed:none")).toBeTruthy();
+    expect(await screen.findByText("selected:none")).toBeTruthy();
+    expect(getMobileSheet()?.dataset.state).toBe("collapsed");
+    expect(screen.getByText("2 veículos")).toBeTruthy();
   });
 });
