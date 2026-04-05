@@ -2,8 +2,13 @@ import { HistoryPlayer } from "@/components/map/history-player";
 
 export default function HistoryPage() {
   return (
-    <div className="h-[calc(100dvh-12rem)] lg:h-[calc(100vh-8rem)]">
-      <h1 className="text-xl lg:text-2xl font-bold mb-3 lg:mb-4">Histórico de Rotas</h1>
+    <div className="flex min-h-full flex-col gap-4">
+      <div className="space-y-1">
+        <h1 className="text-xl font-semibold lg:text-2xl">Historico de Rotas</h1>
+        <p className="text-sm text-muted-foreground">
+          Analise viagens, paradas e o replay da rota em um unico painel.
+        </p>
+      </div>
       <HistoryPlayer />
     </div>
   );
