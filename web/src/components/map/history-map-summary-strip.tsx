@@ -20,11 +20,11 @@ export function HistoryMapSummaryStrip({
 }: HistoryMapSummaryStripProps) {
   return (
     <Card size="sm" className="bg-card/92">
-      <CardContent className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <CardContent className="flex gap-3 overflow-x-auto pb-1">
         {metricLabels.map((metric) => (
           <div
             key={metric.key}
-            className="rounded-lg border border-border/60 bg-background/70 px-3 py-3"
+            className="min-w-[10.5rem] flex-1 rounded-lg border border-border/60 bg-background/70 px-3 py-3"
           >
             <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
               {metric.label}

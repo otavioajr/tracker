@@ -107,31 +107,35 @@ export function HistoryMissionSidebar({
             <SidebarMessage>O trajeto não gerou destaques relevantes.</SidebarMessage>
           ) : (
             <div className="space-y-2">
-              {highlights.map((highlight) => (
-                <button
-                  key={`${highlight.kind}-${highlight.index}-${highlight.timestamp}`}
-                  type="button"
-                  onClick={() => onHighlightSelect(highlight.index)}
-                  className="flex w-full items-start justify-between gap-3 rounded-lg border border-border/60 bg-background/65 px-3 py-2.5 text-left transition-colors hover:bg-accent hover:text-accent-foreground"
-                >
-                  <div className="min-w-0 space-y-1">
-                    <div className="flex items-center gap-2">
-                      <Badge variant={highlight.kind === "stop" ? "secondary" : "outline"}>
-                        {highlight.kind === "stop" ? "Parada" : "Marco"}
-                      </Badge>
-                      <span className="truncate font-medium text-foreground">
-                        {highlight.label}
-                      </span>
+              {highlights.map((highlight, index) => {
+                const display = getHighlightDisplay(highlights, index);
+
+                return (
+                  <button
+                    key={`${highlight.kind}-${highlight.index}-${highlight.timestamp}`}
+                    type="button"
+                    onClick={() => onHighlightSelect(highlight.index)}
+                    className="flex w-full items-start justify-between gap-3 rounded-lg border border-border/60 bg-background/65 px-3 py-2.5 text-left transition-colors hover:bg-accent hover:text-accent-foreground"
+                  >
+                    <div className="min-w-0 space-y-1">
+                      <div className="flex items-center gap-2">
+                        <Badge variant={highlight.kind === "stop" ? "secondary" : "outline"}>
+                          {display.badge}
+                        </Badge>
+                        <span className="truncate font-medium text-foreground">
+                          {display.title}
+                        </span>
+                      </div>
+                      <p className="text-sm text-muted-foreground">
+                        {formatHistoryTimestamp(highlight.timestamp)}
+                      </p>
                     </div>
-                    <p className="text-sm text-muted-foreground">
-                      {formatHistoryTimestamp(highlight.timestamp)}
-                    </p>
-                  </div>
-                  <span className="text-xs font-medium text-muted-foreground">
-                    #{highlight.index + 1}
-                  </span>
-                </button>
-              ))}
+                    <span className="text-xs font-medium text-muted-foreground">
+                      #{highlight.index + 1}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
           )}
         </CardContent>
@@ -261,6 +265,48 @@ function CurrentPointLoadingState() {
       ))}
     </div>
   );
+}
+
+function getHighlightDisplay(
+  highlights: HistoryHighlight[],
+  currentIndex: number
+) {
+  const highlight = highlights[currentIndex];
+
+  if (highlight.kind === "stop") {
+    const stopOrder =
+      highlights.slice(0, currentIndex + 1).filter((item) => item.kind === "stop").length;
+
+    return {
+      badge: "Parada",
+      title: `Parada ${stopOrder}`,
+    };
+  }
+
+  const milestoneOrder =
+    highlights
+      .slice(0, currentIndex + 1)
+      .filter((item) => item.kind === "milestone").length;
+  const totalMilestones = highlights.filter((item) => item.kind === "milestone").length;
+
+  if (milestoneOrder === 1) {
+    return {
+      badge: "Marco",
+      title: "Início da rota",
+    };
+  }
+
+  if (milestoneOrder === totalMilestones) {
+    return {
+      badge: "Marco",
+      title: "Fim da rota",
+    };
+  }
+
+  return {
+    badge: "Marco",
+    title: `Marco ${milestoneOrder}`,
+  };
 }
 
 function formatDuration(totalMinutes: number) {
