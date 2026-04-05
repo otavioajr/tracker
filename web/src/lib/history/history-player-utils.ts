@@ -12,6 +12,7 @@ export type HistorySummary = {
 };
 
 export type HistoryHighlight = {
+  kind: "stop" | "milestone";
   index: number;
   label: string;
   timestamp: string;
@@ -107,6 +108,17 @@ export function buildHistoryHighlights(
   const orderedPositions = sortPositions(positions);
   const highlights: HistoryHighlight[] = [];
   let stopSequenceStartIndex: number | null = null;
+  let stopSequenceEndIndex: number | null = null;
+  let stopCount = 0;
+
+  highlights.push({
+    kind: "milestone",
+    index: 0,
+    label: "Start",
+    timestamp: orderedPositions[0].server_time,
+    latitude: orderedPositions[0].latitude,
+    longitude: orderedPositions[0].longitude,
+  });
 
   for (let index = 0; index < orderedPositions.length; index += 1) {
     const current = orderedPositions[index];
@@ -117,21 +129,27 @@ export function buildHistoryHighlights(
       stopSequenceStartIndex = index;
     }
 
+    if (currentIsStopped) {
+      stopSequenceEndIndex = index;
+    }
+
     const stopSequenceEnds =
       stopSequenceStartIndex !== null &&
       (!next || (next.speed ?? 0) > STOP_SPEED_THRESHOLD_KMH);
 
     if (stopSequenceEnds) {
       const stopStart = orderedPositions[stopSequenceStartIndex];
-      const stopEnd = next ?? current;
+      const stopEnd = orderedPositions[stopSequenceEndIndex ?? stopSequenceStartIndex];
       const stopDurationMinutes =
         (new Date(stopEnd.server_time).getTime() - new Date(stopStart.server_time).getTime()) *
         MINUTES_PER_MS;
 
       if (stopDurationMinutes >= STOP_DURATION_MINUTES) {
+        stopCount += 1;
         highlights.push({
+          kind: "stop",
           index: stopSequenceStartIndex,
-          label: `Stop ${highlights.length + 1}`,
+          label: `Stop ${stopCount}`,
           timestamp: stopStart.server_time,
           latitude: stopStart.latitude,
           longitude: stopStart.longitude,
@@ -139,7 +157,20 @@ export function buildHistoryHighlights(
       }
 
       stopSequenceStartIndex = null;
+      stopSequenceEndIndex = null;
     }
+  }
+
+  const lastPosition = orderedPositions[orderedPositions.length - 1];
+  if (lastPosition && orderedPositions.length > 1) {
+    highlights.push({
+      kind: "milestone",
+      index: orderedPositions.length - 1,
+      label: "End",
+      timestamp: lastPosition.server_time,
+      latitude: lastPosition.latitude,
+      longitude: lastPosition.longitude,
+    });
   }
 
   return highlights;

@@ -89,20 +89,46 @@ describe("history-player-utils", () => {
   it("extracts stop highlights from stationary frames", () => {
     const highlights = buildHistoryHighlights(routeWithStop);
 
-    expect(highlights).toHaveLength(1);
-    expect(highlights[0]).toEqual({
-      index: 1,
-      label: "Stop 1",
-      timestamp: "2026-04-05T10:05:00.000Z",
-      latitude: -23.551,
-      longitude: -46.631,
-    });
+    expect(highlights).toEqual([
+      {
+        kind: "milestone",
+        index: 0,
+        label: "Start",
+        timestamp: "2026-04-05T10:00:00.000Z",
+        latitude: -23.55,
+        longitude: -46.63,
+      },
+      {
+        kind: "stop",
+        index: 1,
+        label: "Stop 1",
+        timestamp: "2026-04-05T10:05:00.000Z",
+        latitude: -23.551,
+        longitude: -46.631,
+      },
+      {
+        kind: "milestone",
+        index: 3,
+        label: "End",
+        timestamp: "2026-04-05T10:18:00.000Z",
+        latitude: -23.552,
+        longitude: -46.632,
+      },
+    ]);
   });
 
-  it("maps speed presets to playback intervals", () => {
-    expect(getPlaybackIntervalMs("1x")).toBeGreaterThan(
-      getPlaybackIntervalMs("4x")
-    );
+  it("maps all playback speed presets to fixed intervals", () => {
+    expect({
+      "1x": getPlaybackIntervalMs("1x"),
+      "2x": getPlaybackIntervalMs("2x"),
+      "4x": getPlaybackIntervalMs("4x"),
+      "8x": getPlaybackIntervalMs("8x"),
+    }).toEqual({
+      "1x": 800,
+      "2x": 400,
+      "4x": 200,
+      "8x": 100,
+    });
   });
 
   it("returns safe empty-state values", () => {
