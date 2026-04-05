@@ -113,6 +113,13 @@ const sparseStopRoute = [
   },
 ];
 
+const unsortedRouteWithStop = [
+  routeWithStop[3],
+  routeWithStop[1],
+  routeWithStop[0],
+  routeWithStop[2],
+] as const;
+
 describe("history-player-utils", () => {
   it("builds the trip summary", () => {
     const summary = buildHistorySummary(positions);
@@ -167,6 +174,37 @@ describe("history-player-utils", () => {
       latitude: -23.551,
       longitude: -46.631,
     });
+  });
+
+  it("preserves original highlight indexes even when input order is unsorted", () => {
+    const highlights = buildHistoryHighlights(unsortedRouteWithStop);
+
+    expect(highlights).toEqual([
+      {
+        kind: "milestone",
+        index: 2,
+        label: "Start",
+        timestamp: "2026-04-05T10:00:00.000Z",
+        latitude: -23.55,
+        longitude: -46.63,
+      },
+      {
+        kind: "stop",
+        index: 1,
+        label: "Stop 1",
+        timestamp: "2026-04-05T10:05:00.000Z",
+        latitude: -23.551,
+        longitude: -46.631,
+      },
+      {
+        kind: "milestone",
+        index: 0,
+        label: "End",
+        timestamp: "2026-04-05T10:18:00.000Z",
+        latitude: -23.552,
+        longitude: -46.632,
+      },
+    ]);
   });
 
   it("maps all playback speed presets to fixed intervals", () => {

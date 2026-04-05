@@ -1,6 +1,12 @@
-import type { VehiclePosition } from "@/lib/actions/positions";
-
 export type PlaybackSpeedPreset = "1x" | "2x" | "4x" | "8x";
+
+export type HistoryPositionInput = {
+  latitude: number;
+  longitude: number;
+  speed: number;
+  ignition: boolean;
+  server_time: string;
+};
 
 export type HistorySummary = {
   totalPoints: number;
@@ -18,6 +24,11 @@ export type HistoryHighlight = {
   timestamp: string;
   latitude: number;
   longitude: number;
+};
+
+type HistoryPositionEntry = {
+  position: HistoryPositionInput;
+  originalIndex: number;
 };
 
 const PLAYBACK_INTERVAL_MS: Record<PlaybackSpeedPreset, number> = {
@@ -43,7 +54,7 @@ export function formatHistoryTimestamp(iso: string) {
 }
 
 export function buildHistorySummary(
-  positions: readonly VehiclePosition[]
+  positions: readonly HistoryPositionInput[]
 ): HistorySummary {
   if (positions.length === 0) {
     return {
@@ -64,29 +75,30 @@ export function buildHistorySummary(
 
   for (let index = 0; index < orderedPositions.length; index += 1) {
     const current = orderedPositions[index];
-    maxSpeedKmh = Math.max(maxSpeedKmh, current.speed ?? 0);
+    maxSpeedKmh = Math.max(maxSpeedKmh, current.position.speed ?? 0);
 
     const next = orderedPositions[index + 1];
     if (!next) continue;
 
-    totalDistanceKm += haversineDistanceKm(current, next);
+    totalDistanceKm += haversineDistanceKm(current.position, next.position);
 
     const intervalMinutes =
-      (new Date(next.server_time).getTime() - new Date(current.server_time).getTime()) *
+      (new Date(next.position.server_time).getTime() -
+        new Date(current.position.server_time).getTime()) *
       MINUTES_PER_MS;
 
     if (intervalMinutes <= 0) continue;
 
-    if ((current.speed ?? 0) <= STOP_SPEED_THRESHOLD_KMH) {
+    if ((current.position.speed ?? 0) <= STOP_SPEED_THRESHOLD_KMH) {
       stoppedMinutes += intervalMinutes;
     } else {
       movingMinutes += intervalMinutes;
     }
   }
 
-  const firstTimestamp = new Date(orderedPositions[0].server_time).getTime();
+  const firstTimestamp = new Date(orderedPositions[0].position.server_time).getTime();
   const lastTimestamp = new Date(
-    orderedPositions[orderedPositions.length - 1].server_time
+    orderedPositions[orderedPositions.length - 1].position.server_time
   ).getTime();
   const totalDurationMinutes = Math.max(0, (lastTimestamp - firstTimestamp) * MINUTES_PER_MS);
 
@@ -101,7 +113,7 @@ export function buildHistorySummary(
 }
 
 export function buildHistoryHighlights(
-  positions: readonly VehiclePosition[]
+  positions: readonly HistoryPositionInput[]
 ): HistoryHighlight[] {
   if (positions.length === 0) return [];
 
@@ -111,19 +123,20 @@ export function buildHistoryHighlights(
   let stopSequenceEndIndex: number | null = null;
   let stopCount = 0;
 
+  const firstPosition = orderedPositions[0];
   highlights.push({
     kind: "milestone",
-    index: 0,
+    index: firstPosition.originalIndex,
     label: "Start",
-    timestamp: orderedPositions[0].server_time,
-    latitude: orderedPositions[0].latitude,
-    longitude: orderedPositions[0].longitude,
+    timestamp: firstPosition.position.server_time,
+    latitude: firstPosition.position.latitude,
+    longitude: firstPosition.position.longitude,
   });
 
   for (let index = 0; index < orderedPositions.length; index += 1) {
     const current = orderedPositions[index];
     const next = orderedPositions[index + 1];
-    const currentIsStopped = (current.speed ?? 0) <= STOP_SPEED_THRESHOLD_KMH;
+    const currentIsStopped = (current.position.speed ?? 0) <= STOP_SPEED_THRESHOLD_KMH;
 
     if (currentIsStopped && stopSequenceStartIndex === null) {
       stopSequenceStartIndex = index;
@@ -135,27 +148,35 @@ export function buildHistoryHighlights(
 
     const stopSequenceEnds =
       stopSequenceStartIndex !== null &&
-      (!next || (next.speed ?? 0) > STOP_SPEED_THRESHOLD_KMH);
+      (!next || (next.position.speed ?? 0) > STOP_SPEED_THRESHOLD_KMH);
 
     if (stopSequenceEnds) {
-      const stopStart = orderedPositions[stopSequenceStartIndex];
+      const stopStartIndex = stopSequenceStartIndex;
+      const stopEndIndex = stopSequenceEndIndex;
+      if (stopStartIndex === null || stopEndIndex === null) {
+        continue;
+      }
+
+      const stopStart = orderedPositions[stopStartIndex];
       const stopEnd =
-        next && (next.speed ?? 0) > STOP_SPEED_THRESHOLD_KMH
+        next && (next.position.speed ?? 0) > STOP_SPEED_THRESHOLD_KMH
           ? next
-          : orderedPositions[stopSequenceEndIndex ?? stopSequenceStartIndex];
+          : orderedPositions[stopEndIndex];
       const stopDurationMinutes =
-        (new Date(stopEnd.server_time).getTime() - new Date(stopStart.server_time).getTime()) *
+        (new Date(stopEnd.position.server_time).getTime() -
+          new Date(stopStart.position.server_time).getTime()) *
         MINUTES_PER_MS;
 
       if (stopDurationMinutes >= STOP_DURATION_MINUTES) {
+        const stopIndex = stopStart.originalIndex;
         stopCount += 1;
         highlights.push({
           kind: "stop",
-          index: stopSequenceStartIndex,
+          index: stopIndex,
           label: `Stop ${stopCount}`,
-          timestamp: stopStart.server_time,
-          latitude: stopStart.latitude,
-          longitude: stopStart.longitude,
+          timestamp: stopStart.position.server_time,
+          latitude: stopStart.position.latitude,
+          longitude: stopStart.position.longitude,
         });
       }
 
@@ -168,25 +189,30 @@ export function buildHistoryHighlights(
   if (lastPosition && orderedPositions.length > 1) {
     highlights.push({
       kind: "milestone",
-      index: orderedPositions.length - 1,
+      index: lastPosition.originalIndex,
       label: "End",
-      timestamp: lastPosition.server_time,
-      latitude: lastPosition.latitude,
-      longitude: lastPosition.longitude,
+      timestamp: lastPosition.position.server_time,
+      latitude: lastPosition.position.latitude,
+      longitude: lastPosition.position.longitude,
     });
   }
 
   return highlights;
 }
 
-function sortPositions(positions: readonly VehiclePosition[]) {
-  return [...positions].sort(
-    (left, right) =>
-      new Date(left.server_time).getTime() - new Date(right.server_time).getTime()
-  );
+function sortPositions(
+  positions: readonly HistoryPositionInput[]
+): HistoryPositionEntry[] {
+  return positions
+    .map((position, originalIndex) => ({ position, originalIndex }))
+    .sort(
+      (left, right) =>
+        new Date(left.position.server_time).getTime() -
+        new Date(right.position.server_time).getTime()
+    );
 }
 
-function haversineDistanceKm(left: VehiclePosition, right: VehiclePosition) {
+function haversineDistanceKm(left: HistoryPositionInput, right: HistoryPositionInput) {
   const earthRadiusKm = 6371;
   const latitudeDelta = toRadians(right.latitude - left.latitude);
   const longitudeDelta = toRadians(right.longitude - left.longitude);
