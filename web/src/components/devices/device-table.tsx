@@ -28,12 +28,23 @@ type Device = {
 
 export function DeviceTable({ devices }: { devices: Device[] }) {
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   async function handleDelete(id: string) {
     if (!confirm("Tem certeza que deseja excluir este dispositivo?")) return;
+    setDeleteError(null);
     setDeleting(id);
-    await deleteDevice(id);
-    setDeleting(null);
+
+    try {
+      const result = await deleteDevice(id);
+      if (result?.error) {
+        setDeleteError(result.error);
+      }
+    } catch {
+      setDeleteError("Não foi possível excluir o dispositivo.");
+    } finally {
+      setDeleting(null);
+    }
   }
 
   return (
@@ -46,6 +57,12 @@ export function DeviceTable({ devices }: { devices: Device[] }) {
       </CardHeader>
 
       <CardContent className="space-y-4">
+        {deleteError ? (
+          <div role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            {deleteError}
+          </div>
+        ) : null}
+
         {devices.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-border/70 bg-muted/20 px-4 py-10 text-center">
             <div className="space-y-1">
@@ -64,10 +81,10 @@ export function DeviceTable({ devices }: { devices: Device[] }) {
                   <TableRow>
                     <TableHead>IMEI</TableHead>
                     <TableHead>Vínculo</TableHead>
+                    <TableHead>Status</TableHead>
                     <TableHead>Modelo</TableHead>
                     <TableHead>Protocolo</TableHead>
                     <TableHead>Última comunicação</TableHead>
-                    <TableHead>Status</TableHead>
                     <TableHead className="w-24">Ações</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -88,16 +105,16 @@ export function DeviceTable({ devices }: { devices: Device[] }) {
                             <span className="text-sm text-muted-foreground">Sem veículo</span>
                           )}
                         </TableCell>
-                        <TableCell>{device.model ?? "—"}</TableCell>
-                        <TableCell>
-                          <Badge variant="outline">{device.protocol}</Badge>
-                        </TableCell>
-                        <TableCell>{formatDeviceLastCommunication(device.last_communication_at)}</TableCell>
                         <TableCell>
                           <Badge variant={device.active ? "default" : "secondary"}>
                             {device.active ? "Ativo" : "Inativo"}
                           </Badge>
                         </TableCell>
+                        <TableCell>{device.model ?? "—"}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline">{device.protocol}</Badge>
+                        </TableCell>
+                        <TableCell>{formatDeviceLastCommunication(device.last_communication_at)}</TableCell>
                         <TableCell>
                           <div className="flex gap-1">
                             <DeviceDialog device={device} />
@@ -106,6 +123,7 @@ export function DeviceTable({ devices }: { devices: Device[] }) {
                               size="sm"
                               onClick={() => handleDelete(device.id)}
                               disabled={deleting === device.id}
+                              aria-label={`Excluir dispositivo ${device.imei}`}
                             >
                               <Trash2 className="size-4 text-destructive" />
                             </Button>
@@ -141,6 +159,7 @@ export function DeviceTable({ devices }: { devices: Device[] }) {
                           size="sm"
                           onClick={() => handleDelete(device.id)}
                           disabled={deleting === device.id}
+                          aria-label={`Excluir dispositivo ${device.imei}`}
                         >
                           <Trash2 className="size-4 text-destructive" />
                         </Button>
