@@ -12,6 +12,8 @@ import { getVehicles } from "@/lib/actions/vehicles";
 import { getPositionHistory, VehiclePosition } from "@/lib/actions/positions";
 import {
   buildHistoryHighlights,
+  buildPlaybackTrailCoords,
+  buildRouteCoords,
   buildHistorySummary,
   getPlaybackIntervalMs,
   type PlaybackSpeedPreset,
@@ -127,9 +129,8 @@ export function HistoryPlayer() {
   const summary = positions.length > 0 ? buildHistorySummary(positions) : null;
   const highlights = positions.length > 0 ? buildHistoryHighlights(positions) : [];
   const currentPosition = positions[currentIndex] ?? null;
-  const routeCoords: [number, number][] = positions
-    .slice(0, currentIndex + 1)
-    .map((position) => [position.latitude, position.longitude]);
+  const routeCoords = buildRouteCoords(positions);
+  const playbackTrailCoords = buildPlaybackTrailCoords(positions, currentIndex);
   const stopHighlights = highlights.filter((highlight) => highlight.kind === "stop");
 
   useEffect(() => {
@@ -328,10 +329,21 @@ export function HistoryPlayer() {
                     ? [currentPosition.latitude, currentPosition.longitude]
                     : null
                 }
+                routeCoords={routeCoords}
+                fitVersion={fitVersion}
               />
 
               {routeCoords.length > 1 ? (
-                <Polyline positions={routeCoords} color="#3b82f6" weight={3} />
+                <Polyline positions={routeCoords} color="#94a3b8" weight={4} opacity={0.5} />
+              ) : null}
+
+              {playbackTrailCoords.length > 1 ? (
+                <Polyline
+                  positions={playbackTrailCoords}
+                  color="#3b82f6"
+                  weight={4}
+                  opacity={0.95}
+                />
               ) : null}
 
               {stopHighlights.map((highlight) => (

@@ -203,6 +203,23 @@ export function buildHistoryHighlights(
   return highlights;
 }
 
+export function buildRouteCoords(
+  positions: readonly Pick<HistoryPositionInput, "latitude" | "longitude">[]
+): [number, number][] {
+  return positions.map((position) => [position.latitude, position.longitude]);
+}
+
+export function buildPlaybackTrailCoords(
+  positions: readonly Pick<HistoryPositionInput, "latitude" | "longitude">[],
+  currentIndex: number
+): [number, number][] {
+  if (positions.length === 0 || currentIndex < 0) return [];
+
+  return positions
+    .slice(0, Math.min(currentIndex + 1, positions.length))
+    .map((position) => [position.latitude, position.longitude]);
+}
+
 function sortPositions(
   positions: readonly HistoryPositionInput[]
 ): HistoryPositionEntry[] {

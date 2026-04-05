@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   buildHistoryHighlights,
+  buildPlaybackTrailCoords,
+  buildRouteCoords,
   buildHistorySummary,
   formatHistoryTimestamp,
   getPlaybackIntervalMs,
@@ -205,6 +207,22 @@ describe("history-player-utils", () => {
         latitude: -23.552,
         longitude: -46.632,
       },
+    ]);
+  });
+
+  it("separates the full route from the current playback trail", () => {
+    expect(buildRouteCoords(routeWithStop)).toEqual([
+      [-23.55, -46.63],
+      [-23.551, -46.631],
+      [-23.551, -46.631],
+      [-23.552, -46.632],
+    ]);
+
+    expect(buildPlaybackTrailCoords(routeWithStop, 0)).toEqual([[-23.55, -46.63]]);
+    expect(buildPlaybackTrailCoords(routeWithStop, 2)).toEqual([
+      [-23.55, -46.63],
+      [-23.551, -46.631],
+      [-23.551, -46.631],
     ]);
   });
 
