@@ -11,23 +11,11 @@ describe("device-presenters", () => {
     const metrics = buildDeviceMetrics(
       [
         {
-          id: "device-1",
-          imei: "861234567890123",
-          protocol: "suntech",
-          model: "ST300",
           active: true,
-          serial_number: "SN-01",
-          last_communication_at: "2026-04-05T12:00:00.000Z",
           vehicles: { id: "vehicle-1", plate: "ABC1D23" },
         },
         {
-          id: "device-2",
-          imei: "861234567890124",
-          protocol: "suntech",
-          model: null,
           active: false,
-          serial_number: null,
-          last_communication_at: null,
           vehicles: null,
         },
       ],
@@ -51,6 +39,7 @@ describe("device-presenters", () => {
       getPrimaryVehicle({ id: "vehicle-2", plate: "XYZ9K88" }),
     ).toEqual({ id: "vehicle-2", plate: "XYZ9K88" });
 
+    expect(getPrimaryVehicle([])).toBeNull();
     expect(getPrimaryVehicle(null)).toBeNull();
   });
 
@@ -67,5 +56,14 @@ describe("device-presenters", () => {
     expect(
       formatDeviceLastCommunication("2026-04-05T09:00:00.000Z", now),
     ).toBe("há 3h");
+  });
+
+  it("handles invalid and future communication timestamps safely", () => {
+    const now = new Date("2026-04-05T12:00:00.000Z");
+
+    expect(formatDeviceLastCommunication("not-a-date", now)).toBe("Nunca");
+    expect(
+      formatDeviceLastCommunication("2026-04-05T12:10:00.000Z", now),
+    ).toBe("Agora");
   });
 });

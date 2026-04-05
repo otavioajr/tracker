@@ -3,14 +3,8 @@ export type DeviceVehicle = {
   plate: string;
 };
 
-export type DeviceListItem = {
-  id: string;
-  imei: string;
-  protocol: string;
-  model: string | null;
+export type DeviceMetricSource = {
   active: boolean;
-  serial_number?: string | null;
-  last_communication_at: string | null;
   vehicles: DeviceVehicle | DeviceVehicle[] | null;
 };
 
@@ -29,7 +23,7 @@ export function getPrimaryVehicle(
 }
 
 export function buildDeviceMetrics(
-  devices: DeviceListItem[],
+  devices: DeviceMetricSource[],
   pendingCount: number,
 ): DeviceMetrics {
   return {
@@ -48,7 +42,11 @@ export function formatDeviceLastCommunication(
   if (!value) return "Nunca";
 
   const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Nunca";
+
   const diffMs = now.getTime() - date.getTime();
+  if (diffMs < 0) return "Agora";
+
   const diffMinutes = Math.floor(diffMs / 60000);
   const diffHours = Math.floor(diffMinutes / 60);
   const diffDays = Math.floor(diffHours / 24);
