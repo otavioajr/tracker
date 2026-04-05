@@ -1,9 +1,28 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useCallback, useState } from "react";
 import dynamic from "next/dynamic";
+import { MapPinned, PanelRightClose } from "lucide-react";
+
+import { DashboardFollowBar } from "@/components/map/dashboard-follow-bar";
+import {
+  DashboardMobileSheet,
+  type DashboardMobileSheetState,
+} from "@/components/map/dashboard-mobile-sheet";
+import { DashboardVehicleBrowser } from "@/components/map/dashboard-vehicle-browser";
+import type {
+  DashboardVehicleListEntry,
+  VehiclePosition,
+} from "@/components/map/types";
+import { Button } from "@/components/ui/button";
 import { useRealtimePositions } from "@/lib/hooks/use-realtime-positions";
-import type { VehiclePosition } from "@/lib/actions/positions";
+import {
+  type DashboardVehicleFilter,
+  filterDashboardVehicles,
+  formatLastSignalRelative,
+  getVehicleDisplayLabel,
+  getVehicleOperationalStatus,
+} from "@/lib/map/dashboard-map-utils";
 
 const TrackingMap = dynamic(
   () => import("@/components/map/tracking-map").then((mod) => mod.TrackingMap),
@@ -23,11 +42,20 @@ type DashboardMapProps = {
 
 export function DashboardMap({ initialPositions }: DashboardMapProps) {
   const positions = useRealtimePositions(initialPositions);
+  const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(null);
   const [followedDeviceId, setFollowedDeviceId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] =
+    useState<DashboardVehicleFilter>("all");
+  const [desktopRailOpen, setDesktopRailOpen] = useState(true);
+  const [mobileSheetState, setMobileSheetState] =
+    useState<DashboardMobileSheetState>("collapsed");
   const [fitAllTrigger, setFitAllTrigger] = useState(0);
 
-  const handleFollow = useCallback((deviceId: string) => {
+  const handleSelectVehicle = useCallback((deviceId: string) => {
+    setSelectedDeviceId(deviceId);
     setFollowedDeviceId(deviceId);
+    setMobileSheetState("collapsed");
   }, []);
 
   const handleCancelFollow = useCallback(() => {
@@ -35,52 +63,75 @@ export function DashboardMap({ initialPositions }: DashboardMapProps) {
   }, []);
 
   const handleFitAll = useCallback(() => {
+    setSelectedDeviceId(null);
     setFollowedDeviceId(null);
+    setMobileSheetState("collapsed");
     setFitAllTrigger((prev) => prev + 1);
   }, []);
 
-  const followedVehicle = followedDeviceId
-    ? positions.find((p) => p.device_id === followedDeviceId)
+  const filteredPositions = filterDashboardVehicles(positions, {
+    query: searchQuery,
+    status: statusFilter,
+  });
+
+  const vehicleEntries: DashboardVehicleListEntry[] = filteredPositions.map(
+    (position) => ({
+      device_id: position.device_id,
+      displayLabel: getVehicleDisplayLabel(position),
+      secondaryLabel: position.vehicle_name
+        ? position.plate || position.device_id
+        : position.plate
+          ? position.device_id
+          : undefined,
+      status: getVehicleOperationalStatus(position),
+      lastSignalLabel: formatLastSignalRelative(position.server_time),
+      speedLabel: `${position.speed.toFixed(0)} km/h`,
+    })
+  );
+
+  const selectedVehicle = selectedDeviceId
+    ? positions.find((position) => position.device_id === selectedDeviceId) ?? null
     : null;
 
+  const followedVehicle = followedDeviceId
+    ? positions.find((position) => position.device_id === followedDeviceId) ?? null
+    : null;
+
+  const visibleSummaryLabel = `${filteredPositions.length} ${
+    filteredPositions.length === 1 ? "veículo visível" : "veículos visíveis"
+  }`;
+
+  const mobileTitle = selectedVehicle
+    ? getVehicleDisplayLabel(selectedVehicle)
+    : `${positions.length} ${positions.length === 1 ? "veículo" : "veículos"}`;
+
   return (
-    <div className="relative w-full h-full">
+    <div className="relative h-full w-full overflow-hidden rounded-[28px] border border-white/8 bg-black/10 ring-1 ring-white/6">
       <TrackingMap
         positions={positions}
-        className="w-full h-full"
+        className="h-full w-full"
+        selectedDeviceId={selectedDeviceId}
         followedDeviceId={followedDeviceId}
-        onFollow={handleFollow}
+        onSelect={handleSelectVehicle}
+        onFollow={handleSelectVehicle}
         onCancelFollow={handleCancelFollow}
         fitAllTrigger={fitAllTrigger}
       />
 
-      {/* Following indicator */}
-      {followedVehicle && (
-        <div className="absolute top-3 left-1/2 -translate-x-1/2 z-[1000] pointer-events-none">
-          <div className="flex items-center gap-2 bg-primary text-primary-foreground rounded-full px-4 py-2 shadow-lg glow-primary text-xs sm:text-sm font-semibold whitespace-nowrap">
-            <span className="w-2 h-2 bg-primary-foreground/40 rounded-full animate-pulse" />
-            Seguindo:{" "}
-            {followedVehicle.vehicle_name ||
-              followedVehicle.plate ||
-              followedVehicle.device_id}{" "}
-            — {followedVehicle.speed.toFixed(0)} km/h
-          </div>
+      {followedVehicle ? (
+        <div className="absolute top-3 left-1/2 z-[1000] -translate-x-1/2">
+          <DashboardFollowBar
+            vehicle={followedVehicle}
+            status={getVehicleOperationalStatus(followedVehicle)}
+            onExitFollow={handleCancelFollow}
+          />
         </div>
-      )}
+      ) : null}
 
-      {/* Drag hint */}
-      {followedDeviceId && (
-        <div className="absolute bottom-28 lg:bottom-14 left-1/2 -translate-x-1/2 z-[1000] pointer-events-none">
-          <div className="bg-black/60 text-white rounded-lg px-3 py-1.5 text-xs whitespace-nowrap backdrop-blur-sm">
-            Arraste o mapa para sair do modo follow
-          </div>
-        </div>
-      )}
-
-      {/* Fit all button */}
       <button
+        type="button"
         onClick={handleFitAll}
-        className="absolute bottom-24 lg:bottom-4 right-3 z-[1000] flex items-center gap-2 bg-card/90 hover:bg-accent border border-border/50 rounded-xl px-4 py-2.5 shadow-lg text-xs font-semibold text-foreground backdrop-blur-sm transition-all active:scale-95"
+        className="absolute right-3 bottom-24 z-[1000] flex items-center gap-2 rounded-2xl border border-white/10 bg-background/88 px-4 py-2.5 text-xs font-semibold text-foreground shadow-[0_20px_40px_-24px_rgba(0,0,0,0.75)] backdrop-blur-xl transition-all active:scale-95 lg:bottom-4"
       >
         <svg
           width="14"
@@ -95,13 +146,79 @@ export function DashboardMap({ initialPositions }: DashboardMapProps) {
         Ver todos
       </button>
 
-      {/* Vehicle count */}
-      <div className="absolute bottom-24 lg:bottom-4 left-3 z-[1000] pointer-events-none">
-        <div className="bg-card/90 border border-border/50 rounded-xl px-3 py-2 shadow-lg text-xs font-semibold text-foreground backdrop-blur-sm">
-          <span className="text-primary font-bold">{positions.length}</span>{" "}
+      <div className="pointer-events-none absolute bottom-24 left-3 z-[1000] lg:bottom-4">
+        <div className="rounded-2xl border border-white/10 bg-background/88 px-3 py-2 text-xs font-semibold text-foreground shadow-[0_20px_40px_-24px_rgba(0,0,0,0.75)] backdrop-blur-xl">
+          <span className="font-bold text-primary">{positions.length}</span>{" "}
           {positions.length === 1 ? "veículo" : "veículos"}
         </div>
       </div>
+
+      {desktopRailOpen ? (
+        <div className="absolute right-3 bottom-20 z-[1000] hidden lg:flex">
+          <div className="flex h-[min(68vh,42rem)] max-h-[calc(100%-6rem)] w-[22rem] flex-col overflow-hidden rounded-[28px] border border-white/10 bg-background/88 p-4 text-foreground shadow-[0_24px_48px_-24px_rgba(0,0,0,0.75)] backdrop-blur-2xl">
+            <div className="mb-4 flex items-start justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold">Despacho em tempo real</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Busque, filtre e acompanhe um veículo sem sair do mapa.
+                </p>
+              </div>
+              <Button
+                type="button"
+                size="icon-sm"
+                variant="ghost"
+                aria-label="Recolher painel do mapa"
+                className="shrink-0 border border-white/10 bg-white/5 hover:bg-white/10"
+                onClick={() => setDesktopRailOpen(false)}
+              >
+                <PanelRightClose />
+              </Button>
+            </div>
+
+            <DashboardVehicleBrowser
+              vehicles={vehicleEntries}
+              selectedDeviceId={selectedDeviceId}
+              query={searchQuery}
+              statusFilter={statusFilter}
+              summaryLabel={visibleSummaryLabel}
+              onQueryChange={setSearchQuery}
+              onStatusFilterChange={setStatusFilter}
+              onSelectVehicle={handleSelectVehicle}
+            />
+          </div>
+        </div>
+      ) : (
+        <div className="absolute right-3 bottom-20 z-[1000] hidden lg:flex">
+          <Button
+            type="button"
+            size="icon-lg"
+            variant="ghost"
+            aria-label="Abrir painel do mapa"
+            className="rounded-2xl border border-white/10 bg-background/88 shadow-[0_20px_40px_-24px_rgba(0,0,0,0.75)] backdrop-blur-xl hover:bg-background/95"
+            onClick={() => setDesktopRailOpen(true)}
+          >
+            <MapPinned />
+          </Button>
+        </div>
+      )}
+
+      <DashboardMobileSheet
+        state={mobileSheetState}
+        title={mobileTitle}
+        subtitle={visibleSummaryLabel}
+        onStateChange={setMobileSheetState}
+      >
+        <DashboardVehicleBrowser
+          vehicles={vehicleEntries}
+          selectedDeviceId={selectedDeviceId}
+          query={searchQuery}
+          statusFilter={statusFilter}
+          summaryLabel={visibleSummaryLabel}
+          onQueryChange={setSearchQuery}
+          onStatusFilterChange={setStatusFilter}
+          onSelectVehicle={handleSelectVehicle}
+        />
+      </DashboardMobileSheet>
     </div>
   );
 }

@@ -2,20 +2,7 @@
 
 import "leaflet/dist/leaflet.css";
 import dynamic from "next/dynamic";
-
-type VehiclePosition = {
-  device_id: string;
-  latitude: number;
-  longitude: number;
-  speed: number;
-  heading: number;
-  ignition: boolean;
-  device_time: string;
-  server_time: string;
-  plate?: string;
-  vehicle_name?: string;
-  vehicle_model?: string;
-};
+import type { VehiclePosition } from "./types";
 
 const SAO_PAULO: [number, number] = [-23.55, -46.63];
 
@@ -55,7 +42,9 @@ const MapControllerDynamic = dynamic(
 type TrackingMapProps = {
   positions: VehiclePosition[];
   className?: string;
+  selectedDeviceId: string | null;
   followedDeviceId: string | null;
+  onSelect: (deviceId: string) => void;
   onFollow: (deviceId: string) => void;
   onCancelFollow: () => void;
   fitAllTrigger: number;
@@ -64,7 +53,9 @@ type TrackingMapProps = {
 export function TrackingMap({
   positions,
   className,
+  selectedDeviceId,
   followedDeviceId,
+  onSelect,
   onFollow,
   onCancelFollow,
   fitAllTrigger,
@@ -117,6 +108,8 @@ export function TrackingMap({
         <VehicleMarkerDynamic
           key={pos.device_id}
           position={pos}
+          selected={pos.device_id === selectedDeviceId}
+          onSelect={onSelect}
           onFollow={onFollow}
         />
       ))}
