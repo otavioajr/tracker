@@ -1,12 +1,15 @@
 "use client";
 
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { useState } from "react";
+import { Car, Trash2 } from "lucide-react";
+
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { DeviceDialog } from "./device-dialog";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { deleteDevice } from "@/lib/actions/devices";
-import { Trash2, Car } from "lucide-react";
-import { useState } from "react";
+import { DeviceDialog } from "./device-dialog";
+import { formatDeviceLastCommunication, getPrimaryVehicle } from "./device-presenters";
 
 type Vehicle = {
   id: string;
@@ -25,86 +28,168 @@ type Device = {
 
 export function DeviceTable({ devices }: { devices: Device[] }) {
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   async function handleDelete(id: string) {
     if (!confirm("Tem certeza que deseja excluir este dispositivo?")) return;
+    setDeleteError(null);
     setDeleting(id);
-    await deleteDevice(id);
-    setDeleting(null);
-  }
 
-  function formatLastCommunication(value: string | null): string {
-    if (!value) return "Nunca";
-    return new Intl.DateTimeFormat("pt-BR", {
-      dateStyle: "short",
-      timeStyle: "short",
-    }).format(new Date(value));
+    try {
+      const result = await deleteDevice(id);
+      if (result?.error) {
+        setDeleteError(result.error);
+      }
+    } catch {
+      setDeleteError("Não foi possível excluir o dispositivo.");
+    } finally {
+      setDeleting(null);
+    }
   }
 
   return (
-    <Table>
-      <TableHeader>
-        <TableRow>
-          <TableHead>IMEI</TableHead>
-          <TableHead>Protocolo</TableHead>
-          <TableHead>Modelo</TableHead>
-          <TableHead>Veiculo</TableHead>
-          <TableHead>Ultima comunicacao</TableHead>
-          <TableHead>Status</TableHead>
-          <TableHead className="w-24">Acoes</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {devices.length === 0 && (
-          <TableRow>
-            <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
-              Nenhum dispositivo cadastrado
-            </TableCell>
-          </TableRow>
-        )}
-        {devices.map((d) => (
-          <TableRow key={d.id}>
-            <TableCell className="font-mono">{d.imei}</TableCell>
-            <TableCell>
-              <Badge variant="outline">{d.protocol}</Badge>
-            </TableCell>
-            <TableCell>{d.model ?? "—"}</TableCell>
-            <TableCell>
-              {(() => {
-                const v = Array.isArray(d.vehicles) ? d.vehicles[0] : d.vehicles;
-                return v ? (
-                  <Badge variant="secondary" className="gap-1">
-                    <Car size={12} /> {v.plate}
-                  </Badge>
-                ) : (
-                  <span className="text-muted-foreground text-sm">Sem veiculo</span>
+    <Card className="border border-border/60 bg-card/95">
+      <CardHeader className="gap-2 border-b border-border/60">
+        <CardTitle>Inventário principal</CardTitle>
+        <CardDescription>
+          Consulte vínculo, status e última comunicação sem perder o contexto operacional.
+        </CardDescription>
+      </CardHeader>
+
+      <CardContent className="space-y-4">
+        {deleteError ? (
+          <div role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            {deleteError}
+          </div>
+        ) : null}
+
+        {devices.length === 0 ? (
+          <div className="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-border/70 bg-muted/20 px-4 py-10 text-center">
+            <div className="space-y-1">
+              <p className="text-base font-medium">Nenhum dispositivo cadastrado</p>
+              <p className="text-sm text-muted-foreground">
+                Cadastre o primeiro dispositivo para começar a organizar o provisionamento da frota.
+              </p>
+            </div>
+            <DeviceDialog />
+          </div>
+        ) : (
+          <>
+            <div className="hidden md:block">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>IMEI</TableHead>
+                    <TableHead>Vínculo</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Modelo</TableHead>
+                    <TableHead>Protocolo</TableHead>
+                    <TableHead>Última comunicação</TableHead>
+                    <TableHead className="w-24">Ações</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {devices.map((device) => {
+                    const vehicle = getPrimaryVehicle(device.vehicles);
+
+                    return (
+                      <TableRow key={device.id}>
+                        <TableCell className="font-mono tabular-nums">{device.imei}</TableCell>
+                        <TableCell>
+                          {vehicle ? (
+                            <Badge variant="secondary" className="gap-1">
+                              <Car className="size-3.5" />
+                              {vehicle.plate}
+                            </Badge>
+                          ) : (
+                            <span className="text-sm text-muted-foreground">Sem veículo</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={device.active ? "default" : "secondary"}>
+                            {device.active ? "Ativo" : "Inativo"}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>{device.model ?? "—"}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline">{device.protocol}</Badge>
+                        </TableCell>
+                        <TableCell>{formatDeviceLastCommunication(device.last_communication_at)}</TableCell>
+                        <TableCell>
+                          <div className="flex gap-1">
+                            <DeviceDialog device={device} />
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleDelete(device.id)}
+                              disabled={deleting === device.id}
+                              aria-label={`Excluir dispositivo ${device.imei}`}
+                            >
+                              <Trash2 className="size-4 text-destructive" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+
+            <div className="grid gap-3 md:hidden">
+              {devices.map((device) => {
+                const vehicle = getPrimaryVehicle(device.vehicles);
+
+                return (
+                  <div key={device.id} className="rounded-xl border border-border/60 bg-background/80 p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="space-y-2">
+                        <p className="font-mono text-sm font-medium tabular-nums">{device.imei}</p>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge variant={device.active ? "default" : "secondary"}>
+                            {device.active ? "Ativo" : "Inativo"}
+                          </Badge>
+                          <Badge variant="outline">{device.protocol}</Badge>
+                        </div>
+                      </div>
+                      <div className="flex gap-1">
+                        <DeviceDialog device={device} />
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleDelete(device.id)}
+                          disabled={deleting === device.id}
+                          aria-label={`Excluir dispositivo ${device.imei}`}
+                        >
+                          <Trash2 className="size-4 text-destructive" />
+                        </Button>
+                      </div>
+                    </div>
+
+                    <dl className="mt-4 grid gap-3 text-sm">
+                      <MobileInfo label="Vínculo" value={vehicle?.plate ?? "Sem veículo"} />
+                      <MobileInfo label="Modelo" value={device.model ?? "—"} />
+                      <MobileInfo
+                        label="Última comunicação"
+                        value={formatDeviceLastCommunication(device.last_communication_at)}
+                      />
+                    </dl>
+                  </div>
                 );
-              })()}
-            </TableCell>
-            <TableCell>{formatLastCommunication(d.last_communication_at)}</TableCell>
-            <TableCell>
-              {d.active ? (
-                <Badge>Ativo</Badge>
-              ) : (
-                <Badge variant="secondary">Inativo</Badge>
-              )}
-            </TableCell>
-            <TableCell>
-              <div className="flex gap-1">
-                <DeviceDialog device={d} />
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => handleDelete(d.id)}
-                  disabled={deleting === d.id}
-                >
-                  <Trash2 size={14} className="text-destructive" />
-                </Button>
-              </div>
-            </TableCell>
-          </TableRow>
-        ))}
-      </TableBody>
-    </Table>
+              })}
+            </div>
+          </>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function MobileInfo({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between gap-4">
+      <dt className="text-muted-foreground">{label}</dt>
+      <dd className="font-medium">{value}</dd>
+    </div>
   );
 }
