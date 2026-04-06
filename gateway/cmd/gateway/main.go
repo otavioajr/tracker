@@ -81,7 +81,7 @@ func main() {
 	pendingWriter := storage.NewPendingWriter(pool, logger)
 
 	// Protocol registry (binary must be checked before ASCII)
-	registry := protocol.NewRegistry(protocol.NewSuntechBinaryParser(), protocol.NewSuntechParser())
+	registry := protocol.NewRegistry(protocol.NewSuntechBinaryParser(), protocol.NewSuntechParser(), protocol.NewGT06Parser())
 
 	// Metrics
 	m := metrics.New(func() int64 { return 0 })
