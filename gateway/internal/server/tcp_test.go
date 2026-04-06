@@ -10,11 +10,13 @@ import (
 )
 
 type mockHandler struct {
-	positions []*protocol.Position
+	positions    []*protocol.Position
+	protocolName string
 }
 
-func (m *mockHandler) HandlePosition(pos *protocol.Position) {
+func (m *mockHandler) HandlePosition(pos *protocol.Position, protocolName string) {
 	m.positions = append(m.positions, pos)
+	m.protocolName = protocolName
 }
 
 func TestTCPServer_AcceptsConnection(t *testing.T) {

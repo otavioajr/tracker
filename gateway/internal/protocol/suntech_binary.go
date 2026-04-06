@@ -31,7 +31,7 @@ func NewSuntechBinaryParser() *SuntechBinaryParser {
 func (p *SuntechBinaryParser) Name() string { return "suntech-binary" }
 
 func (p *SuntechBinaryParser) Identify(data []byte) bool {
-	return len(data) >= minBinaryFrameLen && data[0] == stx
+	return len(data) >= 1 && data[0] == stx
 }
 
 func (p *SuntechBinaryParser) ReadFrame(reader *bufio.Reader) ([]byte, error) {

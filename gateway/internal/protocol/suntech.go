@@ -24,7 +24,8 @@ func (p *SuntechParser) Name() string { return "suntech" }
 
 func (p *SuntechParser) Identify(data []byte) bool {
 	s := string(data)
-	return strings.HasPrefix(s, suntechPrefix300) || strings.HasPrefix(s, suntechPrefix340)
+	return strings.HasPrefix(s, suntechPrefix300) || strings.HasPrefix(s, suntechPrefix340) ||
+		strings.HasPrefix(s, "ST30") || strings.HasPrefix(s, "ST34")
 }
 
 func (p *SuntechParser) ReadFrame(reader *bufio.Reader) ([]byte, error) {

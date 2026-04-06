@@ -143,12 +143,12 @@ type gateway struct {
 	logger      *slog.Logger
 }
 
-func (g *gateway) HandlePosition(pos *protocol.Position) {
+func (g *gateway) HandlePosition(pos *protocol.Position, protocolName string) {
 	g.metrics.PositionsReceived.Add(1)
 
 	info, ok := g.writer.LookupDevice(pos.IMEI)
 	if !ok {
-		g.pending.Track(context.Background(), pos.IMEI, "suntech", pos.RemoteAddr)
+		g.pending.Track(context.Background(), pos.IMEI, protocolName, pos.RemoteAddr)
 		return
 	}
 

@@ -2,7 +2,6 @@ package server
 
 import (
 	"bufio"
-	"encoding/binary"
 	"fmt"
 	"io"
 	"log/slog"
@@ -16,7 +15,7 @@ import (
 
 // PositionHandler processes parsed positions.
 type PositionHandler interface {
-	HandlePosition(pos *protocol.Position)
+	HandlePosition(pos *protocol.Position, protocolName string)
 }
 
 // Config for the TCP server.
@@ -120,7 +119,23 @@ func (s *Server) handleConnection(conn net.Conn) {
 	s.logger.Debug("new connection", "remote", remoteAddr)
 
 	reader := bufio.NewReader(conn)
-	session := &protocol.Session{Data: make(map[string]any)}
+
+	// Peek to detect protocol
+	peek, err := reader.Peek(4)
+	if err != nil {
+		s.logger.Debug("connection closed during peek", "remote", remoteAddr, "error", err)
+		return
+	}
+
+	parser := s.registry.Find(peek)
+	if parser == nil {
+		s.logger.Warn("unknown protocol", "remote", remoteAddr, "data", fmt.Sprintf("%x", peek))
+		return
+	}
+
+	s.logger.Debug("protocol detected", "remote", remoteAddr, "protocol", parser.Name())
+
+	session := protocol.Session{Data: make(map[string]any)}
 
 	for {
 		select {
@@ -131,7 +146,7 @@ func (s *Server) handleConnection(conn net.Conn) {
 
 		conn.SetDeadline(time.Now().Add(s.config.IdleTimeout))
 
-		frame, err := readFrame(reader)
+		frame, err := parser.ReadFrame(reader)
 		if err != nil {
 			if err != io.EOF {
 				s.logger.Debug("connection closed", "remote", remoteAddr, "error", err)
@@ -143,75 +158,28 @@ func (s *Server) handleConnection(conn net.Conn) {
 			continue
 		}
 
-		parser := s.registry.Find(frame)
-		if parser == nil {
-			s.logger.Warn("unknown protocol", "remote", remoteAddr, "data", string(frame[:min(len(frame), 50)]))
-			continue
-		}
-
-		pos, err := parser.Parse(frame, session)
+		pos, err := parser.Parse(frame, &session)
 		if err != nil {
 			s.logger.Warn("parse error", "protocol", parser.Name(), "error", err, "remote", remoteAddr)
 			continue
 		}
 
-		pos.RemoteAddr = remoteAddr
-
-		if ack := parser.ACK(frame, session); ack != nil {
+		if ack := parser.ACK(frame, &session); ack != nil {
 			conn.Write(ack)
 		}
 
-		s.handler.HandlePosition(pos)
-	}
-}
+		// nil position means non-data packet (login, heartbeat) — skip
+		if pos == nil {
+			continue
+		}
 
-// readFrame reads one protocol frame, auto-detecting binary (STX-framed) or ASCII (newline-delimited).
-func readFrame(r *bufio.Reader) ([]byte, error) {
-	// Peek at first byte to determine framing
-	first, err := r.Peek(1)
-	if err != nil {
-		return nil, err
-	}
+		pos.RemoteAddr = remoteAddr
 
-	if first[0] == 0x02 { // STX → binary frame
-		return readBinaryFrame(r)
-	}
+		// Use session IMEI if parser didn't set it on the position
+		if pos.IMEI == "" && session.IMEI != "" {
+			pos.IMEI = session.IMEI
+		}
 
-	// ASCII: read until \n
-	line, err := r.ReadBytes('\n')
-	if err != nil {
-		return nil, err
+		s.handler.HandlePosition(pos, parser.Name())
 	}
-	// Trim \r\n
-	for len(line) > 0 && (line[len(line)-1] == '\n' || line[len(line)-1] == '\r') {
-		line = line[:len(line)-1]
-	}
-	return line, nil
-}
-
-// readBinaryFrame reads a Suntech binary ZIP frame: STX(1) + LEN(2) + payload(LEN) + ETX(1).
-func readBinaryFrame(r *bufio.Reader) ([]byte, error) {
-	// Read STX + length header (3 bytes)
-	header := make([]byte, 3)
-	if _, err := io.ReadFull(r, header); err != nil {
-		return nil, fmt.Errorf("binary frame header: %w", err)
-	}
-
-	payloadLen := int(binary.BigEndian.Uint16(header[1:3]))
-	if payloadLen <= 0 || payloadLen > 4096 {
-		return nil, fmt.Errorf("binary frame: invalid length %d", payloadLen)
-	}
-
-	// Read payload + ETX
-	rest := make([]byte, payloadLen+1)
-	if _, err := io.ReadFull(r, rest); err != nil {
-		return nil, fmt.Errorf("binary frame payload: %w", err)
-	}
-
-	// Assemble full frame
-	frame := make([]byte, 3+payloadLen+1)
-	copy(frame, header)
-	copy(frame[3:], rest)
-
-	return frame, nil
 }

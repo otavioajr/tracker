@@ -17,7 +17,7 @@ func TestSuntechBinaryIdentify(t *testing.T) {
 	}{
 		{"valid STX frame", "02003210511340877028813f180c170016041051290c0635652d793653000038001a30e601665e560000000100750002712704000103", true},
 		{"ASCII message", "535433303053545400", false}, // "ST300STT"
-		{"too short", "0200", false},
+		{"too short but valid STX", "0200", true}, // Identify only checks first byte for peek-based detection
 		{"empty", "", false},
 	}
 
