@@ -1,6 +1,9 @@
 package protocol
 
-import "time"
+import (
+	"bufio"
+	"time"
+)
 
 // Position represents a parsed GPS position from any device protocol.
 type Position struct {
@@ -18,12 +21,19 @@ type Position struct {
 	RemoteAddr string // client IP:port, set by TCP handler
 }
 
+// Session holds per-connection state that persists across frames.
+type Session struct {
+	IMEI string
+	Data map[string]any
+}
+
 // Parser defines the interface that all device protocol parsers must implement.
 type Parser interface {
-	Identify(data []byte) bool
-	Parse(data []byte) (*Position, error)
-	ACK(data []byte) []byte
 	Name() string
+	Identify(peek []byte) bool
+	ReadFrame(reader *bufio.Reader) ([]byte, error)
+	Parse(data []byte, session *Session) (*Position, error)
+	ACK(data []byte, session *Session) []byte
 }
 
 // Registry holds registered parsers and routes data to the correct one.

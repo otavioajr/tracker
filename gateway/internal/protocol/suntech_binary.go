@@ -1,9 +1,11 @@
 package protocol
 
 import (
+	"bufio"
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
+	"io"
 	"time"
 )
 
@@ -32,7 +34,29 @@ func (p *SuntechBinaryParser) Identify(data []byte) bool {
 	return len(data) >= minBinaryFrameLen && data[0] == stx
 }
 
-func (p *SuntechBinaryParser) Parse(data []byte) (*Position, error) {
+func (p *SuntechBinaryParser) ReadFrame(reader *bufio.Reader) ([]byte, error) {
+	header := make([]byte, 3)
+	if _, err := io.ReadFull(reader, header); err != nil {
+		return nil, fmt.Errorf("binary frame header: %w", err)
+	}
+	if header[0] != stx {
+		return nil, fmt.Errorf("binary frame: expected STX, got 0x%02x", header[0])
+	}
+	payloadLen := int(binary.BigEndian.Uint16(header[1:3]))
+	if payloadLen <= 0 || payloadLen > 4096 {
+		return nil, fmt.Errorf("binary frame: invalid length %d", payloadLen)
+	}
+	rest := make([]byte, payloadLen+1)
+	if _, err := io.ReadFull(reader, rest); err != nil {
+		return nil, fmt.Errorf("binary frame payload: %w", err)
+	}
+	frame := make([]byte, 3+payloadLen+1)
+	copy(frame, header)
+	copy(frame[3:], rest)
+	return frame, nil
+}
+
+func (p *SuntechBinaryParser) Parse(data []byte, session *Session) (*Position, error) {
 	if len(data) < minBinaryFrameLen {
 		return nil, fmt.Errorf("suntech-binary: frame too short (%d bytes)", len(data))
 	}
@@ -128,7 +152,7 @@ func (p *SuntechBinaryParser) Parse(data []byte) (*Position, error) {
 	}, nil
 }
 
-func (p *SuntechBinaryParser) ACK(data []byte) []byte {
+func (p *SuntechBinaryParser) ACK(data []byte, session *Session) []byte {
 	return nil
 }
 

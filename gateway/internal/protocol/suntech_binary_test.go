@@ -1,6 +1,8 @@
 package protocol
 
 import (
+	"bufio"
+	"bytes"
 	"encoding/hex"
 	"testing"
 )
@@ -39,7 +41,7 @@ func TestSuntechBinaryParse(t *testing.T) {
 			t.Fatalf("bad hex: %v", err)
 		}
 
-		pos, err := p.Parse(data)
+		pos, err := p.Parse(data, &Session{})
 		if err != nil {
 			t.Fatalf("Parse error: %v", err)
 		}
@@ -75,7 +77,7 @@ func TestSuntechBinaryParse(t *testing.T) {
 			t.Fatalf("bad hex: %v", err)
 		}
 
-		pos, err := p.Parse(data)
+		pos, err := p.Parse(data, &Session{})
 		if err != nil {
 			t.Fatalf("Parse error: %v", err)
 		}
@@ -102,7 +104,7 @@ func TestSuntechBinaryParse(t *testing.T) {
 
 	t.Run("missing STX", func(t *testing.T) {
 		data := []byte{0x00, 0x00, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}
-		_, err := p.Parse(data)
+		_, err := p.Parse(data, &Session{})
 		if err == nil {
 			t.Error("expected error for missing STX")
 		}
@@ -110,7 +112,7 @@ func TestSuntechBinaryParse(t *testing.T) {
 
 	t.Run("truncated frame", func(t *testing.T) {
 		data, _ := hex.DecodeString("0200321051134087") // truncated
-		_, err := p.Parse(data)
+		_, err := p.Parse(data, &Session{})
 		if err == nil {
 			t.Error("expected error for truncated frame")
 		}
@@ -163,5 +165,18 @@ func TestSuntechBinaryName(t *testing.T) {
 	p := NewSuntechBinaryParser()
 	if p.Name() != "suntech-binary" {
 		t.Errorf("Name() = %q, want %q", p.Name(), "suntech-binary")
+	}
+}
+
+func TestSuntechBinaryReadFrame(t *testing.T) {
+	p := NewSuntechBinaryParser()
+	data, _ := hex.DecodeString("02003210511340877028813f180c170016041051290c0635652d793653000038001a30e601665e560000000100750002712704000103")
+	reader := bufio.NewReader(bytes.NewReader(data))
+	frame, err := p.ReadFrame(reader)
+	if err != nil {
+		t.Fatalf("ReadFrame error: %v", err)
+	}
+	if !bytes.Equal(frame, data) {
+		t.Errorf("ReadFrame returned different data")
 	}
 }

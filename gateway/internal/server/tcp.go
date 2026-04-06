@@ -120,6 +120,7 @@ func (s *Server) handleConnection(conn net.Conn) {
 	s.logger.Debug("new connection", "remote", remoteAddr)
 
 	reader := bufio.NewReader(conn)
+	session := &protocol.Session{Data: make(map[string]any)}
 
 	for {
 		select {
@@ -148,7 +149,7 @@ func (s *Server) handleConnection(conn net.Conn) {
 			continue
 		}
 
-		pos, err := parser.Parse(frame)
+		pos, err := parser.Parse(frame, session)
 		if err != nil {
 			s.logger.Warn("parse error", "protocol", parser.Name(), "error", err, "remote", remoteAddr)
 			continue
@@ -156,7 +157,7 @@ func (s *Server) handleConnection(conn net.Conn) {
 
 		pos.RemoteAddr = remoteAddr
 
-		if ack := parser.ACK(frame); ack != nil {
+		if ack := parser.ACK(frame, session); ack != nil {
 			conn.Write(ack)
 		}
 

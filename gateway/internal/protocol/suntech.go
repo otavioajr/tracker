@@ -1,6 +1,7 @@
 package protocol
 
 import (
+	"bufio"
 	"fmt"
 	"strconv"
 	"strings"
@@ -26,7 +27,18 @@ func (p *SuntechParser) Identify(data []byte) bool {
 	return strings.HasPrefix(s, suntechPrefix300) || strings.HasPrefix(s, suntechPrefix340)
 }
 
-func (p *SuntechParser) Parse(data []byte) (*Position, error) {
+func (p *SuntechParser) ReadFrame(reader *bufio.Reader) ([]byte, error) {
+	line, err := reader.ReadBytes('\n')
+	if err != nil {
+		return nil, err
+	}
+	for len(line) > 0 && (line[len(line)-1] == '\n' || line[len(line)-1] == '\r') {
+		line = line[:len(line)-1]
+	}
+	return line, nil
+}
+
+func (p *SuntechParser) Parse(data []byte, session *Session) (*Position, error) {
 	raw := strings.TrimRight(string(data), "\r\n")
 	fields := strings.Split(raw, ";")
 
@@ -90,6 +102,6 @@ func (p *SuntechParser) Parse(data []byte) (*Position, error) {
 	}, nil
 }
 
-func (p *SuntechParser) ACK(data []byte) []byte {
+func (p *SuntechParser) ACK(data []byte, session *Session) []byte {
 	return nil
 }

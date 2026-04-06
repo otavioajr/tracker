@@ -1,6 +1,8 @@
 package protocol
 
 import (
+	"bufio"
+	"strings"
 	"testing"
 	"time"
 )
@@ -36,7 +38,7 @@ func TestSuntechParse(t *testing.T) {
 	t.Run("valid STT message", func(t *testing.T) {
 		data := []byte("ST300STT;123456789012345;04;374;20260318;10:30:00;0CD4A;-23.550520;-046.633308;045.500;127.30;11;1;1;12.24")
 
-		pos, err := p.Parse(data)
+		pos, err := p.Parse(data, &Session{})
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -74,7 +76,7 @@ func TestSuntechParse(t *testing.T) {
 
 	t.Run("too few fields", func(t *testing.T) {
 		data := []byte("ST300STT;123456789012345;04")
-		_, err := p.Parse(data)
+		_, err := p.Parse(data, &Session{})
 		if err == nil {
 			t.Error("expected error for too few fields")
 		}
@@ -82,7 +84,7 @@ func TestSuntechParse(t *testing.T) {
 
 	t.Run("invalid latitude", func(t *testing.T) {
 		data := []byte("ST300STT;123456789012345;04;374;20260318;10:30:00;0CD4A;INVALID;-046.633308;000.000;000.00;11;1;0;12.24")
-		_, err := p.Parse(data)
+		_, err := p.Parse(data, &Session{})
 		if err == nil {
 			t.Error("expected error for invalid latitude")
 		}
@@ -91,7 +93,7 @@ func TestSuntechParse(t *testing.T) {
 
 func TestSuntechACK(t *testing.T) {
 	p := NewSuntechParser()
-	ack := p.ACK([]byte("ST300STT;123456789012345;..."))
+	ack := p.ACK([]byte("ST300STT;123456789012345;..."), &Session{})
 	if ack != nil {
 		t.Errorf("ACK should be nil for STT messages, got %v", ack)
 	}
@@ -101,5 +103,19 @@ func TestSuntechName(t *testing.T) {
 	p := NewSuntechParser()
 	if p.Name() != "suntech" {
 		t.Errorf("Name() = %q, want %q", p.Name(), "suntech")
+	}
+}
+
+func TestSuntechReadFrame(t *testing.T) {
+	p := NewSuntechParser()
+	input := "ST300STT;123456789012345;04;374;20260318;10:30:00;0CD4A;-23.55;-046.63;0;0;11;1;0;12.24\r\n"
+	reader := bufio.NewReader(strings.NewReader(input))
+	frame, err := p.ReadFrame(reader)
+	if err != nil {
+		t.Fatalf("ReadFrame error: %v", err)
+	}
+	expected := "ST300STT;123456789012345;04;374;20260318;10:30:00;0CD4A;-23.55;-046.63;0;0;11;1;0;12.24"
+	if string(frame) != expected {
+		t.Errorf("ReadFrame = %q, want %q", string(frame), expected)
 	}
 }
