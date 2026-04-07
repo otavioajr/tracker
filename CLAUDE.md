@@ -87,5 +87,7 @@ Web (`web/.env.local`): `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_K
 
 Example files: `gateway/.env.example`, `web/.env.local.example`
 
+When creating a git worktree for this repository, always copy `web/.env.local` from the main workspace into the worktree's `web/.env.local` before running or testing the web app.
+
 ## Additional Notes
 - When the user says "Use the agent teams or in portuguese use "Use o times de agentes" always use TeamCreate."
