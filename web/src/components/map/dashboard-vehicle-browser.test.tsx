@@ -38,9 +38,11 @@ describe("DashboardVehicleBrowser", () => {
         query=""
         statusFilter="all"
         summaryLabel="2 veículos visíveis"
+        activeTrailDeviceIds={new Set()}
         onQueryChange={vi.fn()}
         onStatusFilterChange={vi.fn()}
         onSelectVehicle={vi.fn()}
+        onToggleVehicleTrail={vi.fn()}
       />
     );
 
@@ -68,9 +70,11 @@ describe("DashboardVehicleBrowser", () => {
         query=""
         statusFilter="all"
         summaryLabel="2 veículos visíveis"
+        activeTrailDeviceIds={new Set()}
         onQueryChange={handleQueryChange}
         onStatusFilterChange={handleStatusFilterChange}
         onSelectVehicle={handleSelectVehicle}
+        onToggleVehicleTrail={vi.fn()}
       />
     );
 
@@ -85,6 +89,41 @@ describe("DashboardVehicleBrowser", () => {
     expect(handleSelectVehicle).toHaveBeenCalledWith("truck-1");
   });
 
+  it("renders the trail toggle per vehicle and does not select on toggle click", () => {
+    const handleSelectVehicle = vi.fn();
+    const handleToggleTrail = vi.fn();
+
+    render(
+      <DashboardVehicleBrowser
+        vehicles={vehicles}
+        selectedDeviceId={null}
+        query=""
+        statusFilter="all"
+        summaryLabel="2 veículos visíveis"
+        activeTrailDeviceIds={new Set(["van-2"])}
+        onQueryChange={vi.fn()}
+        onStatusFilterChange={vi.fn()}
+        onSelectVehicle={handleSelectVehicle}
+        onToggleVehicleTrail={handleToggleTrail}
+      />
+    );
+
+    const inactiveToggle = screen.getByRole("switch", {
+      name: /mostrar rastro do Truck 01/i,
+    });
+    const activeToggle = screen.getByRole("switch", {
+      name: /mostrar rastro do Van 02/i,
+    });
+
+    expect(inactiveToggle.getAttribute("aria-checked")).toBe("false");
+    expect(activeToggle.getAttribute("aria-checked")).toBe("true");
+
+    fireEvent.click(inactiveToggle);
+
+    expect(handleToggleTrail).toHaveBeenCalledWith("truck-1");
+    expect(handleSelectVehicle).not.toHaveBeenCalled();
+  });
+
   it("renders an empty state when there are no vehicles after filtering", () => {
     render(
       <DashboardVehicleBrowser
@@ -93,9 +132,11 @@ describe("DashboardVehicleBrowser", () => {
         query="zzz"
         statusFilter="all"
         summaryLabel="0 veículos visíveis"
+        activeTrailDeviceIds={new Set()}
         onQueryChange={vi.fn()}
         onStatusFilterChange={vi.fn()}
         onSelectVehicle={vi.fn()}
+        onToggleVehicleTrail={vi.fn()}
       />
     );
 

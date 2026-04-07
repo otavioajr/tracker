@@ -23,9 +23,11 @@ type DashboardVehicleBrowserProps = {
   query: string;
   statusFilter: DashboardVehicleFilter;
   summaryLabel: string;
+  activeTrailDeviceIds: Set<string>;
   onQueryChange: (value: string) => void;
   onStatusFilterChange: (filter: DashboardVehicleFilter) => void;
   onSelectVehicle: (deviceId: string) => void;
+  onToggleVehicleTrail: (deviceId: string) => void;
 };
 
 export function DashboardVehicleBrowser({
@@ -34,9 +36,11 @@ export function DashboardVehicleBrowser({
   query,
   statusFilter,
   summaryLabel,
+  activeTrailDeviceIds,
   onQueryChange,
   onStatusFilterChange,
   onSelectVehicle,
+  onToggleVehicleTrail,
 }: DashboardVehicleBrowserProps) {
   return (
     <div className="flex h-full min-h-0 flex-col gap-4">
@@ -98,7 +102,9 @@ export function DashboardVehicleBrowser({
                 key={vehicle.device_id}
                 vehicle={vehicle}
                 selected={vehicle.device_id === selectedDeviceId}
+                trailActive={activeTrailDeviceIds.has(vehicle.device_id)}
                 onSelect={() => onSelectVehicle(vehicle.device_id)}
+                onToggleTrail={() => onToggleVehicleTrail(vehicle.device_id)}
               />
             ))}
           </div>
