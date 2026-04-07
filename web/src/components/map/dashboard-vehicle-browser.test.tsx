@@ -89,6 +89,27 @@ describe("DashboardVehicleBrowser", () => {
     expect(handleSelectVehicle).toHaveBeenCalledWith("truck-1");
   });
 
+  it("remains compatible when trail props are omitted", () => {
+    const handleSelectVehicle = vi.fn();
+
+    render(
+      <DashboardVehicleBrowser
+        vehicles={vehicles}
+        selectedDeviceId={null}
+        query=""
+        statusFilter="all"
+        summaryLabel="2 veículos visíveis"
+        onQueryChange={vi.fn()}
+        onStatusFilterChange={vi.fn()}
+        onSelectVehicle={handleSelectVehicle}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /selecionar Truck 01/i }));
+
+    expect(handleSelectVehicle).toHaveBeenCalledWith("truck-1");
+  });
+
   it("renders the trail toggle per vehicle and does not select on toggle click", () => {
     const handleSelectVehicle = vi.fn();
     const handleToggleTrail = vi.fn();
