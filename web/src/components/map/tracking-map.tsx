@@ -39,9 +39,14 @@ const MapControllerDynamic = dynamic(
   { ssr: false }
 );
 
+const VehicleTrailLayerDynamic = dynamic(
+  () => import("./vehicle-trail-layer").then((m) => m.VehicleTrailLayer),
+  { ssr: false }
+);
+
 export type TrackingMapProps = {
   positions: VehiclePosition[];
-  trails?: DashboardVehicleTrail[];
+  trails: DashboardVehicleTrail[];
   className?: string;
   selectedDeviceId: string | null;
   followedDeviceId: string | null;
@@ -62,8 +67,6 @@ export function TrackingMap({
   onCancelFollow,
   fitAllTrigger,
 }: TrackingMapProps) {
-  void trails;
-
   const center: [number, number] =
     positions.length > 0
       ? [positions[0].latitude, positions[0].longitude]
@@ -108,6 +111,9 @@ export function TrackingMap({
         fitAllTrigger={fitAllTrigger}
         onCancelFollow={onCancelFollow}
       />
+      {trails.map((trail) => (
+        <VehicleTrailLayerDynamic key={trail.deviceId} trail={trail} />
+      ))}
       {positions.map((pos) => (
         <VehicleMarkerDynamic
           key={pos.device_id}
