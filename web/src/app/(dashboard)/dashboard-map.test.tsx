@@ -7,11 +7,16 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 function TrackingMapStub({
   followedDeviceId,
   selectedDeviceId,
+  trails,
   onCancelFollow,
   onSelect,
 }: {
   followedDeviceId: string | null;
   selectedDeviceId: string | null;
+  trails?: {
+    deviceId: string;
+    points: { latitude: number; longitude: number; server_time: string }[];
+  }[];
   onCancelFollow: () => void;
   onSelect?: (deviceId: string) => void;
 }) {
@@ -19,6 +24,7 @@ function TrackingMapStub({
     <div data-testid="tracking-map-stub">
       <span>followed:{followedDeviceId ?? "none"}</span>
       <span>selected:{selectedDeviceId ?? "none"}</span>
+      <span>trails:{trails?.map((trail) => trail.deviceId).join(",") || "none"}</span>
       <button type="button" onClick={() => onSelect?.("van-2")}>
         Marker Van 02
       </button>
@@ -130,5 +136,29 @@ describe("DashboardMap", () => {
     expect(await screen.findByText("selected:none")).toBeTruthy();
     expect(getMobileSheet()?.dataset.state).toBe("collapsed");
     expect(screen.getByText("2 veículos")).toBeTruthy();
+  });
+
+  it("passes active trails to the map and clears only the toggled vehicle", async () => {
+    render(<DashboardMap initialPositions={positions} />);
+
+    fireEvent.click(
+      (
+        await screen.findAllByRole("switch", {
+          name: /mostrar rastro do Truck 01/i,
+        })
+      )[0]
+    );
+
+    expect(await screen.findByText("trails:truck-1")).toBeTruthy();
+
+    fireEvent.click(
+      (
+        await screen.findAllByRole("switch", {
+          name: /mostrar rastro do Truck 01/i,
+        })
+      )[0]
+    );
+
+    expect(await screen.findByText("trails:none")).toBeTruthy();
   });
 });

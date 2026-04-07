@@ -2,7 +2,7 @@
 
 import "leaflet/dist/leaflet.css";
 import dynamic from "next/dynamic";
-import type { VehiclePosition } from "./types";
+import type { DashboardVehicleTrail, VehiclePosition } from "./types";
 
 const SAO_PAULO: [number, number] = [-23.55, -46.63];
 
@@ -39,8 +39,14 @@ const MapControllerDynamic = dynamic(
   { ssr: false }
 );
 
-type TrackingMapProps = {
+const VehicleTrailLayerDynamic = dynamic(
+  () => import("./vehicle-trail-layer").then((m) => m.VehicleTrailLayer),
+  { ssr: false }
+);
+
+export type TrackingMapProps = {
   positions: VehiclePosition[];
+  trails: DashboardVehicleTrail[];
   className?: string;
   selectedDeviceId: string | null;
   followedDeviceId: string | null;
@@ -52,6 +58,7 @@ type TrackingMapProps = {
 
 export function TrackingMap({
   positions,
+  trails,
   className,
   selectedDeviceId,
   followedDeviceId,
@@ -104,6 +111,9 @@ export function TrackingMap({
         fitAllTrigger={fitAllTrigger}
         onCancelFollow={onCancelFollow}
       />
+      {trails.map((trail) => (
+        <VehicleTrailLayerDynamic key={trail.deviceId} trail={trail} />
+      ))}
       {positions.map((pos) => (
         <VehicleMarkerDynamic
           key={pos.device_id}

@@ -23,3 +23,14 @@ export type DashboardVehicleListEntry = {
   speedLabel: string;
   secondaryLabel?: string;
 };
+
+export type DashboardTrailPoint = {
+  latitude: number;
+  longitude: number;
+  server_time: string;
+};
+
+export type DashboardVehicleTrail = {
+  deviceId: string;
+  points: DashboardTrailPoint[];
+};
