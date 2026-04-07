@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState, type ComponentType } from "react";
 import dynamic from "next/dynamic";
 import { MapPinned, PanelRightClose } from "lucide-react";
 
@@ -11,11 +11,17 @@ import {
 } from "@/components/map/dashboard-mobile-sheet";
 import { DashboardVehicleBrowser } from "@/components/map/dashboard-vehicle-browser";
 import type {
+  DashboardVehicleTrail,
   DashboardVehicleListEntry,
   VehiclePosition,
 } from "@/components/map/types";
 import { Button } from "@/components/ui/button";
 import { useRealtimePositions } from "@/lib/hooks/use-realtime-positions";
+import {
+  activateTrailForVehicle,
+  clearTrailForVehicle,
+  ingestRealtimeTrailPositions,
+} from "@/lib/map/dashboard-trails";
 import {
   type DashboardVehicleFilter,
   filterDashboardVehicles,
@@ -23,6 +29,24 @@ import {
   getVehicleDisplayLabel,
   getVehicleOperationalStatus,
 } from "@/lib/map/dashboard-map-utils";
+
+type DashboardTrailState = {
+  activeTrailDeviceIds: Set<string>;
+  trailCursors: Record<string, string>;
+  trails: Record<string, DashboardVehicleTrail["points"]>;
+};
+
+type TrackingMapProps = {
+  positions: VehiclePosition[];
+  trails: DashboardVehicleTrail[];
+  className?: string;
+  selectedDeviceId: string | null;
+  followedDeviceId: string | null;
+  onSelect: (deviceId: string) => void;
+  onFollow: (deviceId: string) => void;
+  onCancelFollow: () => void;
+  fitAllTrigger: number;
+};
 
 const TrackingMap = dynamic(
   () => import("@/components/map/tracking-map").then((mod) => mod.TrackingMap),
@@ -34,7 +58,7 @@ const TrackingMap = dynamic(
       </div>
     ),
   }
-);
+) as ComponentType<TrackingMapProps>;
 
 type DashboardMapProps = {
   initialPositions: VehiclePosition[];
@@ -51,6 +75,11 @@ export function DashboardMap({ initialPositions }: DashboardMapProps) {
   const [mobileSheetState, setMobileSheetState] =
     useState<DashboardMobileSheetState>("collapsed");
   const [fitAllTrigger, setFitAllTrigger] = useState(0);
+  const [trailState, setTrailState] = useState<DashboardTrailState>(() => ({
+    activeTrailDeviceIds: new Set<string>(),
+    trailCursors: {},
+    trails: {},
+  }));
 
   const handleSelectVehicle = useCallback((deviceId: string) => {
     setSelectedDeviceId(deviceId);
@@ -68,6 +97,51 @@ export function DashboardMap({ initialPositions }: DashboardMapProps) {
     setMobileSheetState("collapsed");
     setFitAllTrigger((prev) => prev + 1);
   }, []);
+
+  const handleToggleVehicleTrail = useCallback(
+    (deviceId: string) => {
+      const currentPosition = positions.find(
+        (position) => position.device_id === deviceId
+      );
+
+      setTrailState((prev) => {
+        if (prev.activeTrailDeviceIds.has(deviceId)) {
+          return clearTrailForVehicle({
+            deviceId,
+            activeTrailDeviceIds: prev.activeTrailDeviceIds,
+            trailCursors: prev.trailCursors,
+            trails: prev.trails,
+          });
+        }
+
+        return activateTrailForVehicle({
+          deviceId,
+          currentServerTime: currentPosition?.server_time,
+          activeTrailDeviceIds: prev.activeTrailDeviceIds,
+          trailCursors: prev.trailCursors,
+          trails: prev.trails,
+        });
+      });
+    },
+    [positions]
+  );
+
+  useEffect(() => {
+    setTrailState((prev) => {
+      const next = ingestRealtimeTrailPositions({
+        positions,
+        activeTrailDeviceIds: prev.activeTrailDeviceIds,
+        trailCursors: prev.trailCursors,
+        trails: prev.trails,
+      });
+
+      return {
+        ...prev,
+        trailCursors: next.trailCursors,
+        trails: next.trails,
+      };
+    });
+  }, [positions]);
 
   const filteredPositions = filterDashboardVehicles(positions, {
     query: searchQuery,
@@ -104,11 +178,16 @@ export function DashboardMap({ initialPositions }: DashboardMapProps) {
   const mobileTitle = selectedVehicle
     ? getVehicleDisplayLabel(selectedVehicle)
     : `${positions.length} ${positions.length === 1 ? "veículo" : "veículos"}`;
+  const trails = Array.from(trailState.activeTrailDeviceIds).map((deviceId) => ({
+    deviceId,
+    points: trailState.trails[deviceId] ?? [],
+  }));
 
   return (
     <div className="relative h-full w-full overflow-hidden rounded-[28px] border border-white/8 bg-black/10 ring-1 ring-white/6">
       <TrackingMap
         positions={positions}
+        trails={trails}
         className="h-full w-full"
         selectedDeviceId={selectedDeviceId}
         followedDeviceId={followedDeviceId}
@@ -181,9 +260,11 @@ export function DashboardMap({ initialPositions }: DashboardMapProps) {
               query={searchQuery}
               statusFilter={statusFilter}
               summaryLabel={visibleSummaryLabel}
+              activeTrailDeviceIds={trailState.activeTrailDeviceIds}
               onQueryChange={setSearchQuery}
               onStatusFilterChange={setStatusFilter}
               onSelectVehicle={handleSelectVehicle}
+              onToggleVehicleTrail={handleToggleVehicleTrail}
             />
           </div>
         </div>
@@ -214,9 +295,11 @@ export function DashboardMap({ initialPositions }: DashboardMapProps) {
           query={searchQuery}
           statusFilter={statusFilter}
           summaryLabel={visibleSummaryLabel}
+          activeTrailDeviceIds={trailState.activeTrailDeviceIds}
           onQueryChange={setSearchQuery}
           onStatusFilterChange={setStatusFilter}
           onSelectVehicle={handleSelectVehicle}
+          onToggleVehicleTrail={handleToggleVehicleTrail}
         />
       </DashboardMobileSheet>
     </div>
