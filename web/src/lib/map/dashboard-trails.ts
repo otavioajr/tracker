@@ -48,8 +48,10 @@ export function clearTrailForVehicle({
   const nextActiveTrailDeviceIds = new Set(activeTrailDeviceIds);
   nextActiveTrailDeviceIds.delete(deviceId);
 
-  const { [deviceId]: _removedCursor, ...nextTrailCursors } = trailCursors;
-  const { [deviceId]: _removedTrail, ...nextTrails } = trails;
+  const nextTrailCursors = { ...trailCursors };
+  const nextTrails = { ...trails };
+  delete nextTrailCursors[deviceId];
+  delete nextTrails[deviceId];
 
   return {
     activeTrailDeviceIds: nextActiveTrailDeviceIds,
@@ -68,8 +70,16 @@ export function ingestRealtimeTrailPositions({
   positions: VehiclePosition[];
   pointLimit?: number;
 } & TrailState): Pick<TrailState, "trailCursors" | "trails"> {
-  const nextTrailCursors = { ...trailCursors };
-  const nextTrails = { ...trails };
+  if (activeTrailDeviceIds.size === 0) {
+    return {
+      trailCursors,
+      trails,
+    };
+  }
+
+  let nextTrailCursors = trailCursors;
+  let nextTrails = trails;
+  let changed = false;
 
   for (const position of positions) {
     if (!activeTrailDeviceIds.has(position.device_id)) {
@@ -87,6 +97,12 @@ export function ingestRealtimeTrailPositions({
       server_time: position.server_time,
     };
 
+    if (!changed) {
+      nextTrailCursors = { ...trailCursors };
+      nextTrails = { ...trails };
+      changed = true;
+    }
+
     const previousTrail = nextTrails[position.device_id] ?? [];
     nextTrails[position.device_id] = [...previousTrail, nextPoint].slice(
       -pointLimit
@@ -95,7 +111,7 @@ export function ingestRealtimeTrailPositions({
   }
 
   return {
-    trailCursors: nextTrailCursors,
-    trails: nextTrails,
+    trailCursors: changed ? nextTrailCursors : trailCursors,
+    trails: changed ? nextTrails : trails,
   };
 }

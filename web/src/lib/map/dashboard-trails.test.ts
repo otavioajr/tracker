@@ -59,6 +59,74 @@ describe("dashboard-trails", () => {
     expect(result.trailCursors["truck-1"]).toBe("2026-04-07T12:01:00.000Z");
   });
 
+  it("returns the same state references when there are no active trails", () => {
+    const trailCursors = { "truck-1": "2026-04-07T12:00:00.000Z" };
+    const trails = {
+      "truck-1": [
+        {
+          latitude: -23.55,
+          longitude: -46.63,
+          server_time: "2026-04-07T12:00:00.000Z",
+        },
+      ],
+    };
+
+    const result = ingestRealtimeTrailPositions({
+      positions: [
+        {
+          device_id: "truck-1",
+          latitude: -23.551,
+          longitude: -46.631,
+          speed: 42,
+          heading: 0,
+          ignition: true,
+          device_time: "2026-04-07T12:01:00.000Z",
+          server_time: "2026-04-07T12:01:00.000Z",
+        },
+      ],
+      activeTrailDeviceIds: new Set<string>(),
+      trailCursors,
+      trails,
+    });
+
+    expect(result.trailCursors).toBe(trailCursors);
+    expect(result.trails).toBe(trails);
+  });
+
+  it("ignores positions with repeated timestamps and preserves references", () => {
+    const trailCursors = { "truck-1": "2026-04-07T12:01:00.000Z" };
+    const trails = {
+      "truck-1": [
+        {
+          latitude: -23.551,
+          longitude: -46.631,
+          server_time: "2026-04-07T12:01:00.000Z",
+        },
+      ],
+    };
+
+    const result = ingestRealtimeTrailPositions({
+      positions: [
+        {
+          device_id: "truck-1",
+          latitude: -23.551,
+          longitude: -46.631,
+          speed: 42,
+          heading: 0,
+          ignition: true,
+          device_time: "2026-04-07T12:01:00.000Z",
+          server_time: "2026-04-07T12:01:00.000Z",
+        },
+      ],
+      activeTrailDeviceIds: new Set(["truck-1"]),
+      trailCursors,
+      trails,
+    });
+
+    expect(result.trailCursors).toBe(trailCursors);
+    expect(result.trails).toBe(trails);
+  });
+
   it("clears only the requested vehicle when a trail is disabled", () => {
     const result = clearTrailForVehicle({
       deviceId: "truck-1",

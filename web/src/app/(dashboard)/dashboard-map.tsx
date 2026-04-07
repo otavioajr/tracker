@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState, type ComponentType } from "react";
+import { useCallback, useEffect, useReducer, useState } from "react";
 import dynamic from "next/dynamic";
 import { MapPinned, PanelRightClose } from "lucide-react";
 
@@ -11,10 +11,11 @@ import {
 } from "@/components/map/dashboard-mobile-sheet";
 import { DashboardVehicleBrowser } from "@/components/map/dashboard-vehicle-browser";
 import type {
-  DashboardVehicleTrail,
+  DashboardTrailPoint,
   DashboardVehicleListEntry,
   VehiclePosition,
 } from "@/components/map/types";
+import type { TrackingMapProps } from "@/components/map/tracking-map";
 import { Button } from "@/components/ui/button";
 import { useRealtimePositions } from "@/lib/hooks/use-realtime-positions";
 import {
@@ -33,22 +34,65 @@ import {
 type DashboardTrailState = {
   activeTrailDeviceIds: Set<string>;
   trailCursors: Record<string, string>;
-  trails: Record<string, DashboardVehicleTrail["points"]>;
+  trails: Record<string, DashboardTrailPoint[]>;
 };
 
-type TrackingMapProps = {
-  positions: VehiclePosition[];
-  trails: DashboardVehicleTrail[];
-  className?: string;
-  selectedDeviceId: string | null;
-  followedDeviceId: string | null;
-  onSelect: (deviceId: string) => void;
-  onFollow: (deviceId: string) => void;
-  onCancelFollow: () => void;
-  fitAllTrigger: number;
-};
+type DashboardTrailAction =
+  | {
+      type: "toggle";
+      deviceId: string;
+      currentServerTime?: string;
+    }
+  | {
+      type: "ingest";
+      positions: VehiclePosition[];
+    };
 
-const TrackingMap = dynamic(
+function dashboardTrailStateReducer(
+  prev: DashboardTrailState,
+  action: DashboardTrailAction
+): DashboardTrailState {
+  if (action.type === "toggle") {
+    if (prev.activeTrailDeviceIds.has(action.deviceId)) {
+      return clearTrailForVehicle({
+        deviceId: action.deviceId,
+        activeTrailDeviceIds: prev.activeTrailDeviceIds,
+        trailCursors: prev.trailCursors,
+        trails: prev.trails,
+      });
+    }
+
+    return activateTrailForVehicle({
+      deviceId: action.deviceId,
+      currentServerTime: action.currentServerTime,
+      activeTrailDeviceIds: prev.activeTrailDeviceIds,
+      trailCursors: prev.trailCursors,
+      trails: prev.trails,
+    });
+  }
+
+  const next = ingestRealtimeTrailPositions({
+    positions: action.positions,
+    activeTrailDeviceIds: prev.activeTrailDeviceIds,
+    trailCursors: prev.trailCursors,
+    trails: prev.trails,
+  });
+
+  if (
+    next.trailCursors === prev.trailCursors &&
+    next.trails === prev.trails
+  ) {
+    return prev;
+  }
+
+  return {
+    ...prev,
+    trailCursors: next.trailCursors,
+    trails: next.trails,
+  };
+}
+
+const TrackingMap = dynamic<TrackingMapProps>(
   () => import("@/components/map/tracking-map").then((mod) => mod.TrackingMap),
   {
     ssr: false,
@@ -58,7 +102,7 @@ const TrackingMap = dynamic(
       </div>
     ),
   }
-) as ComponentType<TrackingMapProps>;
+);
 
 type DashboardMapProps = {
   initialPositions: VehiclePosition[];
@@ -75,11 +119,14 @@ export function DashboardMap({ initialPositions }: DashboardMapProps) {
   const [mobileSheetState, setMobileSheetState] =
     useState<DashboardMobileSheetState>("collapsed");
   const [fitAllTrigger, setFitAllTrigger] = useState(0);
-  const [trailState, setTrailState] = useState<DashboardTrailState>(() => ({
-    activeTrailDeviceIds: new Set<string>(),
-    trailCursors: {},
-    trails: {},
-  }));
+  const [trailState, dispatchTrailState] = useReducer(
+    dashboardTrailStateReducer,
+    {
+      activeTrailDeviceIds: new Set<string>(),
+      trailCursors: {},
+      trails: {},
+    }
+  );
 
   const handleSelectVehicle = useCallback((deviceId: string) => {
     setSelectedDeviceId(deviceId);
@@ -104,44 +151,25 @@ export function DashboardMap({ initialPositions }: DashboardMapProps) {
         (position) => position.device_id === deviceId
       );
 
-      setTrailState((prev) => {
-        if (prev.activeTrailDeviceIds.has(deviceId)) {
-          return clearTrailForVehicle({
-            deviceId,
-            activeTrailDeviceIds: prev.activeTrailDeviceIds,
-            trailCursors: prev.trailCursors,
-            trails: prev.trails,
-          });
-        }
-
-        return activateTrailForVehicle({
-          deviceId,
-          currentServerTime: currentPosition?.server_time,
-          activeTrailDeviceIds: prev.activeTrailDeviceIds,
-          trailCursors: prev.trailCursors,
-          trails: prev.trails,
-        });
+      dispatchTrailState({
+        type: "toggle",
+        deviceId,
+        currentServerTime: currentPosition?.server_time,
       });
     },
     [positions]
   );
 
   useEffect(() => {
-    setTrailState((prev) => {
-      const next = ingestRealtimeTrailPositions({
-        positions,
-        activeTrailDeviceIds: prev.activeTrailDeviceIds,
-        trailCursors: prev.trailCursors,
-        trails: prev.trails,
-      });
+    if (trailState.activeTrailDeviceIds.size === 0) {
+      return;
+    }
 
-      return {
-        ...prev,
-        trailCursors: next.trailCursors,
-        trails: next.trails,
-      };
+    dispatchTrailState({
+      type: "ingest",
+      positions,
     });
-  }, [positions]);
+  }, [positions, trailState.activeTrailDeviceIds]);
 
   const filteredPositions = filterDashboardVehicles(positions, {
     query: searchQuery,
