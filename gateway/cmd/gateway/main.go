@@ -8,7 +8,6 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -79,6 +78,7 @@ func main() {
 
 	// Pending device writer
 	pendingWriter := storage.NewPendingWriter(pool, logger)
+	protocolEvents := storage.NewProtocolEventWriter(pool, logger)
 
 	// Protocol registry (binary must be checked before ASCII)
 	registry := protocol.NewRegistry(protocol.NewSuntechBinaryParser(), protocol.NewSuntechParser(), protocol.NewGT06Parser())
@@ -88,35 +88,34 @@ func main() {
 
 	// Gateway handler
 	gw := &gateway{
-		writer:      writer,
-		alertEngine: alertEngine,
-		pending:     pendingWriter,
-		pool:        pool,
-		metrics:     m,
-		logger:      logger,
+		writer:         writer,
+		alertEngine:    alertEngine,
+		pending:        pendingWriter,
+		protocolEvents: protocolEvents,
+		pool:           pool,
+		metrics:        m,
+		logger:         logger,
 	}
 
 	// TCP server
 	tcpServer := server.New(server.Config{
 		Port:   cfg.TCPPort,
 		Logger: logger,
-	}, registry, gw)
+	}, registry, protocol.NewDefaultDetector(), gw)
 
 	// Update metrics to use real connection count
 	m.ActiveConnections = tcpServer.ActiveConnections
 
 	// Start background goroutines
 	go writer.StartFlusher(ctx)
-	go writer.StartDeviceReloader(ctx, 30*time.Second)
+	go writer.StartDeviceReloader(ctx, cfg.DeviceReloadInterval)
 	go alerts.NewSyncer(pool, alertEngine, cfg.RuleSyncInterval, logger).Start(ctx)
 	metricsServer := metrics.StartServer(fmt.Sprintf(":%d", cfg.MetricsPort), m, logger)
 
 	// Start TCP server in goroutine
+	serverErrCh := make(chan error, 1)
 	go func() {
-		if err := tcpServer.Start(); err != nil {
-			logger.Error("TCP server error", "error", err)
-			cancel()
-		}
+		serverErrCh <- tcpServer.Start()
 	}()
 
 	logger.Info("tracker gateway started", "tcp_port", cfg.TCPPort, "metrics_port", cfg.MetricsPort)
@@ -124,7 +123,14 @@ func main() {
 	// Wait for shutdown signal
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
-	<-sigCh
+	select {
+	case err := <-serverErrCh:
+		if err != nil {
+			logger.Error("TCP server stopped unexpectedly", "error", err)
+		}
+	case sig := <-sigCh:
+		logger.Info("shutdown signal received", "signal", sig)
+	}
 
 	logger.Info("shutting down...")
 	cancel()
@@ -135,20 +141,29 @@ func main() {
 }
 
 type gateway struct {
-	writer      *storage.Writer
+	writer interface {
+		LookupDevice(string) (storage.DeviceInfo, bool)
+		Enqueue(*protocol.Position)
+	}
 	alertEngine *alerts.Engine
-	pending     *storage.PendingWriter
-	pool        *pgxpool.Pool
-	metrics     *metrics.Metrics
-	logger      *slog.Logger
+	pending     interface {
+		Track(context.Context, string, string, string, string)
+	}
+	protocolEvents interface {
+		TrackUnknownFrame(context.Context, storage.UnknownFrameEvent)
+		TrackProtocolFailure(context.Context, storage.ProtocolFailureEvent)
+	}
+	pool    *pgxpool.Pool
+	metrics *metrics.Metrics
+	logger  *slog.Logger
 }
 
-func (g *gateway) HandlePosition(pos *protocol.Position, protocolName string) {
+func (g *gateway) HandlePosition(pos *protocol.Position, family, variant string) {
 	g.metrics.PositionsReceived.Add(1)
 
 	info, ok := g.writer.LookupDevice(pos.IMEI)
 	if !ok {
-		g.pending.Track(context.Background(), pos.IMEI, protocolName, pos.RemoteAddr)
+		g.pending.Track(context.Background(), pos.IMEI, family, variant, pos.RemoteAddr)
 		return
 	}
 
@@ -159,6 +174,30 @@ func (g *gateway) HandlePosition(pos *protocol.Position, protocolName string) {
 		g.metrics.AlertsTriggered.Add(1)
 		g.saveAlert(alert)
 	}
+}
+
+func (g *gateway) HandleUnknownFrame(frame server.UnknownFrame) {
+	g.protocolEvents.TrackUnknownFrame(context.Background(), storage.UnknownFrameEvent{
+		Transport:       frame.Transport,
+		Fingerprint:     frame.Fingerprint,
+		RemoteIP:        frame.RemoteIP,
+		RawPreview:      frame.RawPreview,
+		RawPayload:      frame.RawPayload,
+		CandidateFamily: frame.CandidateFamily,
+		Confidence:      frame.Confidence,
+	})
+}
+
+func (g *gateway) HandleProtocolFailure(failure server.ProtocolFailure) {
+	g.protocolEvents.TrackProtocolFailure(context.Background(), storage.ProtocolFailureEvent{
+		Family:       failure.Family,
+		Variant:      failure.Variant,
+		ErrorCode:    failure.ErrorCode,
+		ErrorMessage: failure.ErrorMessage,
+		RawPayload:   failure.RawPayload,
+		DeviceHint:   failure.DeviceHint,
+		RemoteIP:     failure.RemoteIP,
+	})
 }
 
 func (g *gateway) saveAlert(alert alerts.Alert) {

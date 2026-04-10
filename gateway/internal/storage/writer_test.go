@@ -93,3 +93,28 @@ func TestBuildBatchSQL_SkipsUnknownDevices(t *testing.T) {
 		t.Errorf("expected 0 args, got %d", len(args))
 	}
 }
+
+func TestBuildBatchInsertCompactSTTUsesDeviceCacheBySerialKey(t *testing.T) {
+	p := protocol.NewSuntechParser()
+	rawMessage := "STT;1910006088;FFFFFF;191;1.0.14;0;20260410;11:22:16;0C3F4D15;724;10;E93F;54;-23.616218;-46.737257;0.00;0.00;16;1;00000000;00000000;0;1;0057;;0083800F;4.0;12.41;;;;;;"
+	position, err := p.Parse([]byte(rawMessage), &protocol.Session{})
+	if err != nil {
+		t.Fatalf("expected parse success, got %v", err)
+	}
+
+	devices := map[string]DeviceInfo{
+		"1910006088": {
+			DeviceID:  "d0000000-0000-0000-0000-000000000008",
+			TenantID:  "a0000000-0000-0000-0000-000000000001",
+			VehicleID: ptrStr("v0000000-0000-0000-0000-000000000002"),
+		},
+	}
+
+	sql, args := buildBatchInsert([]*protocol.Position{position}, devices)
+	if sql == "" {
+		t.Fatal("expected non-empty SQL for compact STT device key match")
+	}
+	if len(args) != 12 {
+		t.Errorf("expected 12 args, got %d", len(args))
+	}
+}

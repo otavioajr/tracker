@@ -23,10 +23,15 @@ type DashboardVehicleBrowserProps = {
   query: string;
   statusFilter: DashboardVehicleFilter;
   summaryLabel: string;
+  activeTrailDeviceIds?: Set<string>;
   onQueryChange: (value: string) => void;
   onStatusFilterChange: (filter: DashboardVehicleFilter) => void;
   onSelectVehicle: (deviceId: string) => void;
+  onToggleVehicleTrail?: (deviceId: string) => void;
 };
+
+const EMPTY_TRAIL_DEVICE_IDS = new Set<string>();
+const noopToggleVehicleTrail = () => {};
 
 export function DashboardVehicleBrowser({
   vehicles,
@@ -34,10 +39,16 @@ export function DashboardVehicleBrowser({
   query,
   statusFilter,
   summaryLabel,
+  activeTrailDeviceIds,
   onQueryChange,
   onStatusFilterChange,
   onSelectVehicle,
+  onToggleVehicleTrail,
 }: DashboardVehicleBrowserProps) {
+  const trailDeviceIds = activeTrailDeviceIds ?? EMPTY_TRAIL_DEVICE_IDS;
+  const handleToggleVehicleTrail =
+    onToggleVehicleTrail ?? noopToggleVehicleTrail;
+
   return (
     <div className="flex h-full min-h-0 flex-col gap-4">
       <div className="space-y-3">
@@ -98,7 +109,9 @@ export function DashboardVehicleBrowser({
                 key={vehicle.device_id}
                 vehicle={vehicle}
                 selected={vehicle.device_id === selectedDeviceId}
+                trailActive={trailDeviceIds.has(vehicle.device_id)}
                 onSelect={() => onSelectVehicle(vehicle.device_id)}
+                onToggleTrail={() => handleToggleVehicleTrail(vehicle.device_id)}
               />
             ))}
           </div>

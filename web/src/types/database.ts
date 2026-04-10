@@ -12,6 +12,31 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.4"
   }
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json
+          operationName?: string
+          query?: string
+          variables?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
   public: {
     Tables: {
       alert_rules: {
@@ -204,6 +229,48 @@ export type Database = {
           },
         ]
       }
+      latest_positions: {
+        Row: {
+          altitude: number | null
+          device_id: string
+          device_time: string
+          heading: number | null
+          ignition: boolean | null
+          location: unknown
+          satellites: number | null
+          server_time: string
+          speed: number | null
+          tenant_id: string
+          vehicle_id: string | null
+        }
+        Insert: {
+          altitude?: number | null
+          device_id: string
+          device_time: string
+          heading?: number | null
+          ignition?: boolean | null
+          location: unknown
+          satellites?: number | null
+          server_time?: string
+          speed?: number | null
+          tenant_id: string
+          vehicle_id?: string | null
+        }
+        Update: {
+          altitude?: number | null
+          device_id?: string
+          device_time?: string
+          heading?: number | null
+          ignition?: boolean | null
+          location?: unknown
+          satellites?: number | null
+          server_time?: string
+          speed?: number | null
+          tenant_id?: string
+          vehicle_id?: string | null
+        }
+        Relationships: []
+      }
       pending_devices: {
         Row: {
           first_seen_at: string
@@ -213,6 +280,8 @@ export type Database = {
           linked_device_id: string | null
           message_count: number
           protocol: Database["public"]["Enums"]["device_protocol"]
+          protocol_family: string
+          protocol_variant: string | null
           serial: string
         }
         Insert: {
@@ -223,6 +292,8 @@ export type Database = {
           linked_device_id?: string | null
           message_count?: number
           protocol?: Database["public"]["Enums"]["device_protocol"]
+          protocol_family?: string
+          protocol_variant?: string | null
           serial: string
         }
         Update: {
@@ -233,6 +304,8 @@ export type Database = {
           linked_device_id?: string | null
           message_count?: number
           protocol?: Database["public"]["Enums"]["device_protocol"]
+          protocol_family?: string
+          protocol_variant?: string | null
           serial?: string
         }
         Relationships: [
@@ -427,6 +500,48 @@ export type Database = {
           },
         ]
       }
+      protocol_failures: {
+        Row: {
+          device_hint: string | null
+          error_code: string
+          error_message: string
+          family: string
+          first_seen_at: string
+          id: string
+          last_seen_at: string
+          occurrences: number
+          raw_payload: string
+          remote_ip: string | null
+          variant: string | null
+        }
+        Insert: {
+          device_hint?: string | null
+          error_code: string
+          error_message: string
+          family: string
+          first_seen_at?: string
+          id?: string
+          last_seen_at?: string
+          occurrences?: number
+          raw_payload: string
+          remote_ip?: string | null
+          variant?: string | null
+        }
+        Update: {
+          device_hint?: string | null
+          error_code?: string
+          error_message?: string
+          family?: string
+          first_seen_at?: string
+          id?: string
+          last_seen_at?: string
+          occurrences?: number
+          raw_payload?: string
+          remote_ip?: string | null
+          variant?: string | null
+        }
+        Relationships: []
+      }
       spatial_ref_sys: {
         Row: {
           auth_name: string | null
@@ -478,6 +593,54 @@ export type Database = {
           plan?: Database["public"]["Enums"]["tenant_plan"]
           slug?: string
           updated_at?: string
+        }
+        Relationships: []
+      }
+      unknown_frames: {
+        Row: {
+          candidate_family: string | null
+          confidence: number | null
+          fingerprint: string
+          first_seen_at: string
+          id: string
+          last_seen_at: string
+          notes: string | null
+          occurrences: number
+          raw_payload: string
+          raw_preview: string | null
+          remote_ip: string | null
+          status: string
+          transport: string
+        }
+        Insert: {
+          candidate_family?: string | null
+          confidence?: number | null
+          fingerprint: string
+          first_seen_at?: string
+          id?: string
+          last_seen_at?: string
+          notes?: string | null
+          occurrences?: number
+          raw_payload: string
+          raw_preview?: string | null
+          remote_ip?: string | null
+          status?: string
+          transport?: string
+        }
+        Update: {
+          candidate_family?: string | null
+          confidence?: number | null
+          fingerprint?: string
+          first_seen_at?: string
+          id?: string
+          last_seen_at?: string
+          notes?: string | null
+          occurrences?: number
+          raw_payload?: string
+          raw_preview?: string | null
+          remote_ip?: string | null
+          status?: string
+          transport?: string
         }
         Relationships: []
       }
@@ -1485,7 +1648,7 @@ export type Database = {
     Enums: {
       alert_severity: "info" | "warning" | "critical"
       alert_type: "speed" | "geofence" | "ignition" | "battery"
-      device_protocol: "suntech"
+      device_protocol: "suntech" | "gt06"
       geofence_type: "inclusion" | "exclusion"
       tenant_plan: "free" | "starter" | "pro" | "enterprise"
       user_role: "admin_platform" | "client"
@@ -1622,11 +1785,14 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {
       alert_severity: ["info", "warning", "critical"],
       alert_type: ["speed", "geofence", "ignition", "battery"],
-      device_protocol: ["suntech"],
+      device_protocol: ["suntech", "gt06"],
       geofence_type: ["inclusion", "exclusion"],
       tenant_plan: ["free", "starter", "pro", "enterprise"],
       user_role: ["admin_platform", "client"],
