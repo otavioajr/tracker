@@ -24,6 +24,10 @@ import {
   ingestRealtimeTrailPositions,
 } from "@/lib/map/dashboard-trails";
 import {
+  readDashboardMapUiPreferences,
+  writeDashboardMapUiPreferences,
+} from "@/lib/map/dashboard-map-preferences";
+import {
   type DashboardVehicleFilter,
   filterDashboardVehicles,
   formatLastSignalRelative,
@@ -39,6 +43,11 @@ type DashboardTrailState = {
 
 type DashboardTrailAction =
   | {
+      type: "hydrate";
+      activeTrailDeviceIds: string[];
+      trailCursors: Record<string, string>;
+    }
+  | {
       type: "toggle";
       deviceId: string;
       currentServerTime?: string;
@@ -52,6 +61,14 @@ function dashboardTrailStateReducer(
   prev: DashboardTrailState,
   action: DashboardTrailAction
 ): DashboardTrailState {
+  if (action.type === "hydrate") {
+    return {
+      activeTrailDeviceIds: new Set(action.activeTrailDeviceIds),
+      trailCursors: action.trailCursors,
+      trails: {},
+    };
+  }
+
   if (action.type === "toggle") {
     if (prev.activeTrailDeviceIds.has(action.deviceId)) {
       return clearTrailForVehicle({
@@ -106,9 +123,10 @@ const TrackingMap = dynamic<TrackingMapProps>(
 
 type DashboardMapProps = {
   initialPositions: VehiclePosition[];
+  userId?: string;
 };
 
-export function DashboardMap({ initialPositions }: DashboardMapProps) {
+export function DashboardMap({ initialPositions, userId }: DashboardMapProps) {
   const positions = useRealtimePositions(initialPositions);
   const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(null);
   const [followedDeviceId, setFollowedDeviceId] = useState<string | null>(null);
@@ -118,6 +136,8 @@ export function DashboardMap({ initialPositions }: DashboardMapProps) {
   const [desktopRailOpen, setDesktopRailOpen] = useState(true);
   const [mobileSheetState, setMobileSheetState] =
     useState<DashboardMobileSheetState>("collapsed");
+  const [hydratedPreferencesUserId, setHydratedPreferencesUserId] =
+    useState<string | null>(null);
   const [fitAllTrigger, setFitAllTrigger] = useState(0);
   const [trailState, dispatchTrailState] = useReducer(
     dashboardTrailStateReducer,
@@ -127,6 +147,33 @@ export function DashboardMap({ initialPositions }: DashboardMapProps) {
       trails: {},
     }
   );
+
+  useEffect(() => {
+    if (!userId) {
+      setMobileSheetState("collapsed");
+      setHydratedPreferencesUserId(null);
+      return;
+    }
+
+    const preferences = readDashboardMapUiPreferences(userId);
+    const hydratedTrailCursors = Object.fromEntries(
+      preferences.activeTrailDeviceIds.map((deviceId) => [
+        deviceId,
+        positions.find((position) => position.device_id === deviceId)?.server_time ?? "",
+      ])
+    );
+
+    setSearchQuery(preferences.searchQuery);
+    setStatusFilter(preferences.statusFilter);
+    setDesktopRailOpen(preferences.desktopRailOpen);
+    setMobileSheetState("collapsed");
+    dispatchTrailState({
+      type: "hydrate",
+      activeTrailDeviceIds: preferences.activeTrailDeviceIds,
+      trailCursors: hydratedTrailCursors,
+    });
+    setHydratedPreferencesUserId(userId);
+  }, [userId]);
 
   const handleSelectVehicle = useCallback((deviceId: string) => {
     setSelectedDeviceId(deviceId);
@@ -170,6 +217,26 @@ export function DashboardMap({ initialPositions }: DashboardMapProps) {
       positions,
     });
   }, [positions, trailState.activeTrailDeviceIds]);
+
+  useEffect(() => {
+    if (!userId || hydratedPreferencesUserId !== userId) {
+      return;
+    }
+
+    writeDashboardMapUiPreferences(userId, {
+      searchQuery,
+      statusFilter,
+      desktopRailOpen,
+      activeTrailDeviceIds: Array.from(trailState.activeTrailDeviceIds),
+    });
+  }, [
+    userId,
+    hydratedPreferencesUserId,
+    searchQuery,
+    statusFilter,
+    desktopRailOpen,
+    trailState.activeTrailDeviceIds,
+  ]);
 
   const filteredPositions = filterDashboardVehicles(positions, {
     query: searchQuery,

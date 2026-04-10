@@ -1,8 +1,14 @@
 // @vitest-environment jsdom
 
 import React from "react";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import { getDashboardMapUiPreferencesStorageKey } from "@/lib/map/dashboard-map-preferences";
+
+const { mockUseRealtimePositions } = vi.hoisted(() => ({
+  mockUseRealtimePositions: vi.fn(),
+}));
 
 function TrackingMapStub({
   followedDeviceId,
@@ -25,6 +31,11 @@ function TrackingMapStub({
       <span>followed:{followedDeviceId ?? "none"}</span>
       <span>selected:{selectedDeviceId ?? "none"}</span>
       <span>trails:{trails?.map((trail) => trail.deviceId).join(",") || "none"}</span>
+      <span>
+        trail-points:
+        {trails?.map((trail) => `${trail.deviceId}:${trail.points.length}`).join(",") ||
+          "none"}
+      </span>
       <button type="button" onClick={() => onSelect?.("van-2")}>
         Marker Van 02
       </button>
@@ -40,7 +51,7 @@ vi.mock("next/dynamic", () => ({
 }));
 
 vi.mock("@/lib/hooks/use-realtime-positions", () => ({
-  useRealtimePositions: <T,>(positions: T[]) => positions,
+  useRealtimePositions: (positions: unknown[]) => mockUseRealtimePositions(positions),
 }));
 
 import { DashboardMap } from "./dashboard-map";
@@ -74,10 +85,65 @@ const positions = [
   },
 ];
 
+const newerPositions = [
+  {
+    ...positions[0],
+    latitude: -23.5008,
+    longitude: -46.6008,
+    server_time: "2026-04-04T15:06:00.000Z",
+  },
+  positions[1],
+];
+
+const USER_ID = "user-1";
+const STORAGE_KEY = getDashboardMapUiPreferencesStorageKey(USER_ID);
+
+function createLocalStorageMock() {
+  const store = new Map<string, string>();
+
+  return {
+    getItem(key: string) {
+      return store.has(key) ? store.get(key)! : null;
+    },
+    setItem(key: string, value: string) {
+      store.set(key, value);
+    },
+    removeItem(key: string) {
+      store.delete(key);
+    },
+    clear() {
+      store.clear();
+    },
+  };
+}
+
 describe("DashboardMap", () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.setSystemTime(new Date("2026-04-04T15:05:00.000Z"));
+    Object.defineProperty(window, "localStorage", {
+      value: createLocalStorageMock(),
+      configurable: true,
+      writable: true,
+    });
+    mockUseRealtimePositions.mockImplementation((incoming: typeof positions) =>
+      incoming.map((position) => ({ ...position }))
+    );
+  });
+
   afterEach(() => {
     cleanup();
+    window.localStorage.clear();
+    vi.useRealTimers();
+    mockUseRealtimePositions.mockReset();
+    vi.unstubAllGlobals();
   });
+
+  function renderDashboardMap(initialPositions = positions) {
+    return render(
+      <DashboardMap initialPositions={initialPositions} userId={USER_ID} />
+    );
+  }
 
   function getMobileSheet() {
     return document.querySelector("[data-state]") as HTMLElement | null;
@@ -92,7 +158,7 @@ describe("DashboardMap", () => {
   }
 
   it("selects from the list and enters follow mode", async () => {
-    render(<DashboardMap initialPositions={positions} />);
+    renderDashboardMap();
 
     await clickVehicleFromBrowser("Truck 01");
 
@@ -103,7 +169,7 @@ describe("DashboardMap", () => {
   });
 
   it("keeps the selected vehicle when follow is cancelled and syncs marker selection", async () => {
-    render(<DashboardMap initialPositions={positions} />);
+    renderDashboardMap();
 
     await clickVehicleFromBrowser("Truck 01");
     fireEvent.click(
@@ -121,7 +187,7 @@ describe("DashboardMap", () => {
   });
 
   it("starts collapsed on mobile and clears the last selection when fitting all vehicles", async () => {
-    render(<DashboardMap initialPositions={positions} />);
+    renderDashboardMap();
 
     expect(getMobileSheet()?.dataset.state).toBe("collapsed");
     expect(screen.getByText("2 veículos")).toBeTruthy();
@@ -139,7 +205,7 @@ describe("DashboardMap", () => {
   });
 
   it("passes active trails to the map and clears only the toggled vehicle", async () => {
-    render(<DashboardMap initialPositions={positions} />);
+    renderDashboardMap();
 
     fireEvent.click(
       (
@@ -160,5 +226,81 @@ describe("DashboardMap", () => {
     );
 
     expect(await screen.findByText("trails:none")).toBeTruthy();
+  });
+
+  it("hydrates saved preferences while keeping the mobile sheet collapsed and trail points ephemeral", async () => {
+    window.localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        searchQuery: "truck",
+        statusFilter: "moving",
+        desktopRailOpen: false,
+        activeTrailDeviceIds: ["truck-1"],
+      })
+    );
+
+    const view = renderDashboardMap();
+
+    expect(getMobileSheet()?.dataset.state).toBe("collapsed");
+    expect(await screen.findByRole("button", { name: "Abrir painel do mapa" })).toBeTruthy();
+    expect(await screen.findByText("trails:truck-1")).toBeTruthy();
+    expect(await screen.findByText("trail-points:truck-1:0")).toBeTruthy();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /Expandir lista de veículos/i })
+    );
+
+    const searchInput = (await screen.findByPlaceholderText(
+      "Buscar veículo"
+    )) as HTMLInputElement;
+
+    expect(searchInput.value).toBe("truck");
+    expect(screen.queryByRole("button", { name: /Selecionar Van 02/i })).toBeNull();
+
+    fireEvent.change(searchInput, { target: { value: "" } });
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /Selecionar Truck 01/i })).toBeTruthy();
+      expect(screen.queryByRole("button", { name: /Selecionar Van 02/i })).toBeNull();
+      expect(screen.getByText("trail-points:truck-1:0")).toBeTruthy();
+    });
+
+    view.rerender(
+      <DashboardMap initialPositions={positions} userId={USER_ID} />
+    );
+
+    expect(await screen.findByText("trail-points:truck-1:0")).toBeTruthy();
+
+    view.rerender(
+      <DashboardMap initialPositions={newerPositions} userId={USER_ID} />
+    );
+
+    expect(await screen.findByText("trail-points:truck-1:1")).toBeTruthy();
+  });
+
+  it("persists search, filter, desktop rail state, and active trails under the user storage key", async () => {
+    renderDashboardMap();
+
+    fireEvent.click(
+      (
+        await screen.findAllByRole("switch", {
+          name: /mostrar rastro do Truck 01/i,
+        })
+      )[0]
+    );
+    fireEvent.change(screen.getByPlaceholderText("Buscar veículo"), {
+      target: { value: "truck" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Em movimento" }));
+    fireEvent.click(screen.getByRole("button", { name: "Recolher painel do mapa" }));
+
+    await waitFor(() => {
+      expect(JSON.parse(window.localStorage.getItem(STORAGE_KEY) ?? "null")).toEqual({
+        searchQuery: "truck",
+        statusFilter: "moving",
+        desktopRailOpen: false,
+        activeTrailDeviceIds: ["truck-1"],
+      });
+    });
   });
 });
