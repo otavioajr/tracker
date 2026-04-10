@@ -21,6 +21,9 @@ func TestLoad_Defaults(t *testing.T) {
 	if cfg.RuleSyncInterval.Seconds() != 30 {
 		t.Errorf("RuleSyncInterval = %v, want 30s", cfg.RuleSyncInterval)
 	}
+	if cfg.DeviceReloadInterval.Seconds() != 5 {
+		t.Errorf("DeviceReloadInterval = %v, want 5s", cfg.DeviceReloadInterval)
+	}
 	if cfg.BufferCapacity != 10000 {
 		t.Errorf("BufferCapacity = %d, want 10000", cfg.BufferCapacity)
 	}
@@ -60,6 +63,7 @@ func TestLoad_CustomPorts(t *testing.T) {
 func TestLoad_CustomIntervals(t *testing.T) {
 	t.Setenv("DATABASE_URL", "postgres://test:test@localhost/test")
 	t.Setenv("RULE_SYNC_INTERVAL", "1m")
+	t.Setenv("DEVICE_RELOAD_INTERVAL", "3s")
 	t.Setenv("FLUSH_INTERVAL", "2s")
 	t.Setenv("FLUSH_SIZE", "50")
 	t.Setenv("BUFFER_CAPACITY", "5000")
@@ -71,6 +75,9 @@ func TestLoad_CustomIntervals(t *testing.T) {
 
 	if cfg.RuleSyncInterval.Seconds() != 60 {
 		t.Errorf("RuleSyncInterval = %v, want 1m", cfg.RuleSyncInterval)
+	}
+	if cfg.DeviceReloadInterval.Seconds() != 3 {
+		t.Errorf("DeviceReloadInterval = %v, want 3s", cfg.DeviceReloadInterval)
 	}
 	if cfg.FlushInterval.Seconds() != 2 {
 		t.Errorf("FlushInterval = %v, want 2s", cfg.FlushInterval)

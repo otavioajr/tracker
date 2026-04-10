@@ -5,9 +5,14 @@ import { buildDeviceMetrics } from "@/components/devices/device-presenters";
 import { PendingDevicesTable } from "@/components/devices/pending-devices-table";
 import { getDevices } from "@/lib/actions/devices";
 import { getPendingDevices } from "@/lib/actions/pending-devices";
+import { getVehicles } from "@/lib/actions/vehicles";
 
 export default async function DevicesPage() {
-  const [devices, pending] = await Promise.all([getDevices(), getPendingDevices()]);
+  const [devices, pending, vehicles] = await Promise.all([
+    getDevices(),
+    getPendingDevices(),
+    getVehicles(),
+  ]);
   const metrics = buildDeviceMetrics(devices, pending.length);
 
   return (
@@ -39,6 +44,13 @@ export default async function DevicesPage() {
           model: device.model,
           serial_number: device.serial_number,
         }))}
+        vehicles={vehicles
+          .filter((vehicle) => !vehicle.device_id)
+          .map((vehicle) => ({
+            id: vehicle.id,
+            name: vehicle.name,
+            plate: vehicle.plate,
+          }))}
       />
 
       <DeviceTable devices={devices} />
