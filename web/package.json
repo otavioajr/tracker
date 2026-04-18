@@ -17,7 +17,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "drizzle-orm": "^0.45.1",
-    "leaflet": "^1.9.4",
+    "leaflet": "npm:leaflet-rotate-map@0.3.1",
     "lucide-react": "^0.577.0",
     "next": "16.1.7",
     "next-themes": "^0.4.6",
@@ -32,8 +32,8 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
-    "@testing-library/react": "^16.3.0",
     "@tailwindcss/postcss": "^4",
+    "@testing-library/react": "^16.3.0",
     "@types/leaflet": "^1.9.21",
     "@types/node": "^20",
     "@types/react": "^19",
