@@ -16,6 +16,9 @@ function TrackingMapStub({
   trails,
   onCancelFollow,
   onSelect,
+  onBearingChange,
+  resetRotationTrigger,
+  rotationEnabled,
 }: {
   followedDeviceId: string | null;
   selectedDeviceId: string | null;
@@ -25,11 +28,16 @@ function TrackingMapStub({
   }[];
   onCancelFollow: () => void;
   onSelect?: (deviceId: string) => void;
+  onBearingChange?: (bearing: number) => void;
+  resetRotationTrigger?: number;
+  rotationEnabled?: boolean;
 }) {
   return (
     <div data-testid="tracking-map-stub">
       <span>followed:{followedDeviceId ?? "none"}</span>
       <span>selected:{selectedDeviceId ?? "none"}</span>
+      <span>rotation-enabled:{rotationEnabled ? "yes" : "no"}</span>
+      <span>reset-rotation:{resetRotationTrigger ?? 0}</span>
       <span>trails:{trails?.map((trail) => trail.deviceId).join(",") || "none"}</span>
       <span>
         trail-points:
@@ -38,6 +46,12 @@ function TrackingMapStub({
       </span>
       <button type="button" onClick={() => onSelect?.("van-2")}>
         Marker Van 02
+      </button>
+      <button type="button" onClick={() => onBearingChange?.(90)}>
+        Report bearing 90
+      </button>
+      <button type="button" onClick={() => onBearingChange?.(0)}>
+        Report bearing 0
       </button>
       <button type="button" onClick={onCancelFollow}>
         Cancel follow
@@ -301,6 +315,32 @@ describe("DashboardMap", () => {
         desktopRailOpen: false,
         activeTrailDeviceIds: ["truck-1"],
       });
+    });
+  });
+
+  it("keeps rotation disabled when the feature flag is off", async () => {
+    vi.stubEnv("NEXT_PUBLIC_ENABLE_MAP_ROTATION", "0");
+    renderDashboardMap();
+    expect(await screen.findByText("rotation-enabled:no")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /resetar norte/i })).toBeNull();
+  });
+
+  it("shows the reset-to-north button only after the map reports a non-zero bearing", async () => {
+    vi.stubEnv("NEXT_PUBLIC_ENABLE_MAP_ROTATION", "1");
+    renderDashboardMap();
+
+    expect(await screen.findByText("rotation-enabled:yes")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /resetar norte/i })).toBeNull();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Report bearing 90" }));
+    expect(await screen.findByRole("button", { name: /resetar norte/i })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: /resetar norte/i }));
+    expect(await screen.findByText("reset-rotation:1")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Report bearing 0" }));
+    await waitFor(() => {
+      expect(screen.queryByRole("button", { name: /resetar norte/i })).toBeNull();
     });
   });
 });

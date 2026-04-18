@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useReducer, useState } from "react";
 import dynamic from "next/dynamic";
-import { MapPinned, PanelRightClose } from "lucide-react";
+import { Compass, MapPinned, PanelRightClose } from "lucide-react";
 
 import { DashboardFollowBar } from "@/components/map/dashboard-follow-bar";
 import {
@@ -34,6 +34,7 @@ import {
   getVehicleDisplayLabel,
   getVehicleOperationalStatus,
 } from "@/lib/map/dashboard-map-utils";
+import { isDashboardMapRotationEnabled } from "@/lib/map/map-rotation-feature";
 
 type DashboardTrailState = {
   activeTrailDeviceIds: Set<string>;
@@ -139,6 +140,10 @@ export function DashboardMap({ initialPositions, userId }: DashboardMapProps) {
   const [hydratedPreferencesUserId, setHydratedPreferencesUserId] =
     useState<string | null>(null);
   const [fitAllTrigger, setFitAllTrigger] = useState(0);
+  const rotationEnabled = isDashboardMapRotationEnabled();
+  const [mapBearing, setMapBearing] = useState(0);
+  const [resetRotationTrigger, setResetRotationTrigger] = useState(0);
+  const showResetRotation = rotationEnabled && Math.abs(mapBearing) > 0.5;
   const [trailState, dispatchTrailState] = useReducer(
     dashboardTrailStateReducer,
     {
@@ -290,6 +295,9 @@ export function DashboardMap({ initialPositions, userId }: DashboardMapProps) {
         onFollow={handleSelectVehicle}
         onCancelFollow={handleCancelFollow}
         fitAllTrigger={fitAllTrigger}
+        rotationEnabled={rotationEnabled}
+        onBearingChange={setMapBearing}
+        resetRotationTrigger={resetRotationTrigger}
       />
 
       {followedVehicle ? (
@@ -319,6 +327,18 @@ export function DashboardMap({ initialPositions, userId }: DashboardMapProps) {
         </svg>
         Ver todos
       </button>
+
+      {showResetRotation ? (
+        <button
+          type="button"
+          aria-label="Resetar norte"
+          onClick={() => setResetRotationTrigger((value) => value + 1)}
+          className="absolute right-3 bottom-36 z-[1000] flex items-center gap-2 rounded-2xl border border-white/10 bg-background/88 px-4 py-2.5 text-xs font-semibold text-foreground shadow-[0_20px_40px_-24px_rgba(0,0,0,0.75)] backdrop-blur-xl transition-all active:scale-95 lg:bottom-16"
+        >
+          <Compass size={14} strokeWidth={2.5} />
+          Norte
+        </button>
+      ) : null}
 
       <div className="pointer-events-none absolute bottom-24 left-3 z-[1000] lg:bottom-4">
         <div className="rounded-2xl border border-white/10 bg-background/88 px-3 py-2 text-xs font-semibold text-foreground shadow-[0_20px_40px_-24px_rgba(0,0,0,0.75)] backdrop-blur-xl">

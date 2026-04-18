@@ -1,6 +1,7 @@
 "use client";
 
 import "leaflet/dist/leaflet.css";
+import { useRef } from "react";
 import dynamic from "next/dynamic";
 import type { DashboardVehicleTrail, VehiclePosition } from "./types";
 
@@ -39,6 +40,12 @@ const MapControllerDynamic = dynamic(
   { ssr: false }
 );
 
+const MapRotationControllerDynamic = dynamic(
+  () =>
+    import("./map-rotation-controller").then((m) => m.MapRotationController),
+  { ssr: false }
+);
+
 const VehicleTrailLayerDynamic = dynamic(
   () => import("./vehicle-trail-layer").then((m) => m.VehicleTrailLayer),
   { ssr: false }
@@ -54,6 +61,9 @@ export type TrackingMapProps = {
   onFollow: (deviceId: string) => void;
   onCancelFollow: () => void;
   fitAllTrigger: number;
+  rotationEnabled: boolean;
+  onBearingChange: (bearing: number) => void;
+  resetRotationTrigger: number;
 };
 
 export function TrackingMap({
@@ -66,11 +76,16 @@ export function TrackingMap({
   onFollow,
   onCancelFollow,
   fitAllTrigger,
+  rotationEnabled,
+  onBearingChange,
+  resetRotationTrigger,
 }: TrackingMapProps) {
   const center: [number, number] =
     positions.length > 0
       ? [positions[0].latitude, positions[0].longitude]
       : SAO_PAULO;
+
+  const rotationInteractionRef = useRef({ isRotating: false });
 
   return (
     <MapContainer
@@ -78,6 +93,7 @@ export function TrackingMap({
       zoom={12}
       style={{ width: "100%", height: "100%", minHeight: 400 }}
       className={className}
+      {...({ rotate: rotationEnabled } as Record<string, unknown>)}
     >
       <LayersControl position="topright">
         <LayersControlBaseLayer checked name="Ruas">
@@ -110,6 +126,13 @@ export function TrackingMap({
         positions={positions}
         fitAllTrigger={fitAllTrigger}
         onCancelFollow={onCancelFollow}
+        interactionStateRef={rotationInteractionRef}
+      />
+      <MapRotationControllerDynamic
+        enabled={rotationEnabled}
+        resetRotationTrigger={resetRotationTrigger}
+        interactionStateRef={rotationInteractionRef}
+        onBearingChange={onBearingChange}
       />
       {trails.map((trail) => (
         <VehicleTrailLayerDynamic key={trail.deviceId} trail={trail} />
