@@ -5,11 +5,22 @@ import { useMap } from "react-leaflet";
 import L from "leaflet";
 import type { VehiclePosition } from "./types";
 
+export function shouldCancelFollowOnMapDrag(isRotationGestureActive: boolean) {
+  return !isRotationGestureActive;
+}
+
+type MapInteractionRef = {
+  current: {
+    isRotating: boolean;
+  };
+};
+
 type MapControllerProps = {
   followedDeviceId: string | null;
   positions: VehiclePosition[];
   fitAllTrigger: number;
   onCancelFollow: () => void;
+  interactionStateRef: MapInteractionRef;
 };
 
 const FOLLOW_ZOOM = 16;
@@ -22,6 +33,7 @@ export function MapController({
   positions,
   fitAllTrigger,
   onCancelFollow,
+  interactionStateRef,
 }: MapControllerProps) {
   const map = useMap();
   const lastFitAllTrigger = useRef(0);
@@ -29,14 +41,19 @@ export function MapController({
   const lastCenteredPoint = useRef<string | null>(null);
   const handleCancelFollow = useEffectEvent(onCancelFollow);
 
-  // Drag exits follow mode, but selection stays in the dashboard state.
+  // Drag exits follow mode unless the user is currently rotating the map.
   useEffect(() => {
-    const handler = () => handleCancelFollow();
+    const handler = () => {
+      if (!shouldCancelFollowOnMapDrag(interactionStateRef.current.isRotating)) {
+        return;
+      }
+      handleCancelFollow();
+    };
     map.on("dragstart", handler);
     return () => {
       map.off("dragstart", handler);
     };
-  }, [map]);
+  }, [map, interactionStateRef]);
 
   // Follow mode: recenter on position updates
   useEffect(() => {
@@ -86,10 +103,26 @@ export function MapController({
     }
 
     if (action.type === "fit-bounds") {
+      const rotatableMap = map as unknown as {
+        getBearing?: () => number;
+        setBearing?: (bearing: number) => void;
+      };
+      const previousBearing =
+        typeof rotatableMap.getBearing === "function"
+          ? rotatableMap.getBearing()
+          : 0;
+
       map.fitBounds(L.latLngBounds(action.bounds), {
         padding: FITALL_PADDING,
         animate: true,
       });
+
+      if (
+        previousBearing !== 0 &&
+        typeof rotatableMap.setBearing === "function"
+      ) {
+        rotatableMap.setBearing(previousBearing);
+      }
     }
 
     lastFitAllTrigger.current = fitAllTrigger;

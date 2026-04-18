@@ -9,6 +9,7 @@ vi.mock("react-leaflet", () => ({
 import {
   getDashboardFitAllAction,
   getDashboardFollowAction,
+  shouldCancelFollowOnMapDrag,
 } from "./map-controller";
 import type { VehiclePosition } from "./types";
 
@@ -101,5 +102,10 @@ describe("map-controller", () => {
       type: "set-current-view",
       center: [-23.551, -46.631],
     });
+  });
+
+  it("only cancels follow when no rotation gesture is active", () => {
+    expect(shouldCancelFollowOnMapDrag(false)).toBe(true);
+    expect(shouldCancelFollowOnMapDrag(true)).toBe(false);
   });
 });
