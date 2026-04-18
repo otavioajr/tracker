@@ -70,6 +70,18 @@ export function attachCtrlDragRotation({
   const container = map.getContainer();
   let active = false;
   let lastAngle = 0;
+  let gestureRect: DOMRect | null = null;
+
+  const handleMouseUp = () => {
+    if (!active) return;
+    active = false;
+    gestureRect = null;
+    interactionStateRef.current.isRotating = false;
+    onBearingChange(normalizeMapBearing(map.getBearing()));
+    document.removeEventListener("mousemove", handleMouseMove, true);
+    document.removeEventListener("mouseup", handleMouseUp, true);
+    window.removeEventListener("blur", handleMouseUp);
+  };
 
   const handleMouseDown = (event: MouseEvent) => {
     if (!event.ctrlKey || event.button !== 0) {
@@ -78,31 +90,26 @@ export function attachCtrlDragRotation({
     event.stopPropagation();
     event.preventDefault();
     active = true;
+    gestureRect = container.getBoundingClientRect();
     interactionStateRef.current.isRotating = true;
-    const point = pointerToContainer(container, event.clientX, event.clientY);
-    lastAngle = angleBetweenPoints(containerCenter(container), point);
+    const center = { x: gestureRect.width / 2, y: gestureRect.height / 2 };
+    const point = { x: event.clientX - gestureRect.left, y: event.clientY - gestureRect.top };
+    lastAngle = angleBetweenPoints(center, point);
     document.addEventListener("mousemove", handleMouseMove, true);
     document.addEventListener("mouseup", handleMouseUp, true);
+    window.addEventListener("blur", handleMouseUp);
   };
 
   const handleMouseMove = (event: MouseEvent) => {
-    if (!active) return;
-    const point = pointerToContainer(container, event.clientX, event.clientY);
-    const angle = angleBetweenPoints(containerCenter(container), point);
+    if (!active || !gestureRect) return;
+    const center = { x: gestureRect.width / 2, y: gestureRect.height / 2 };
+    const point = { x: event.clientX - gestureRect.left, y: event.clientY - gestureRect.top };
+    const angle = angleBetweenPoints(center, point);
     const delta = angleDelta(lastAngle, angle);
     lastAngle = angle;
     const next = map.getBearing() + delta;
     map.setBearing(next);
     onBearingChange(normalizeMapBearing(next));
-  };
-
-  const handleMouseUp = () => {
-    if (!active) return;
-    active = false;
-    interactionStateRef.current.isRotating = false;
-    onBearingChange(normalizeMapBearing(map.getBearing()));
-    document.removeEventListener("mousemove", handleMouseMove, true);
-    document.removeEventListener("mouseup", handleMouseUp, true);
   };
 
   container.addEventListener("mousedown", handleMouseDown, true);
@@ -111,6 +118,7 @@ export function attachCtrlDragRotation({
     container.removeEventListener("mousedown", handleMouseDown, true);
     document.removeEventListener("mousemove", handleMouseMove, true);
     document.removeEventListener("mouseup", handleMouseUp, true);
+    window.removeEventListener("blur", handleMouseUp);
   };
 }
 
@@ -122,10 +130,14 @@ export function attachTouchRotation({
   const container = map.getContainer();
   let active = false;
   let lastAngle = 0;
+  let gestureRect: DOMRect | null = null;
 
-  const angleForTouches = (touches: ArrayLike<{ clientX: number; clientY: number }>) => {
-    const a = pointerToContainer(container, touches[0].clientX, touches[0].clientY);
-    const b = pointerToContainer(container, touches[1].clientX, touches[1].clientY);
+  const angleForTouches = (
+    rect: DOMRect,
+    touches: ArrayLike<{ clientX: number; clientY: number }>
+  ) => {
+    const a = { x: touches[0].clientX - rect.left, y: touches[0].clientY - rect.top };
+    const b = { x: touches[1].clientX - rect.left, y: touches[1].clientY - rect.top };
     return (Math.atan2(b.y - a.y, b.x - a.x) * 180) / Math.PI;
   };
 
@@ -134,16 +146,17 @@ export function attachTouchRotation({
     if (!touchEvent.touches || touchEvent.touches.length !== 2) return;
     event.stopPropagation();
     active = true;
+    gestureRect = container.getBoundingClientRect();
     interactionStateRef.current.isRotating = true;
-    lastAngle = angleForTouches(touchEvent.touches);
+    lastAngle = angleForTouches(gestureRect, touchEvent.touches);
   };
 
   const handleTouchMove = (event: Event) => {
     const touchEvent = event as unknown as { touches: ArrayLike<{ clientX: number; clientY: number }> };
-    if (!active || !touchEvent.touches || touchEvent.touches.length !== 2) return;
+    if (!active || !gestureRect || !touchEvent.touches || touchEvent.touches.length !== 2) return;
     event.stopPropagation();
     event.preventDefault();
-    const angle = angleForTouches(touchEvent.touches);
+    const angle = angleForTouches(gestureRect, touchEvent.touches);
     const delta = angleDelta(lastAngle, angle);
     lastAngle = angle;
     const next = map.getBearing() + delta;
@@ -156,20 +169,21 @@ export function attachTouchRotation({
     if (!active) return;
     if (touchEvent.touches && touchEvent.touches.length >= 2) return;
     active = false;
+    gestureRect = null;
     interactionStateRef.current.isRotating = false;
     onBearingChange(normalizeMapBearing(map.getBearing()));
   };
 
   container.addEventListener("touchstart", handleTouchStart, { capture: true, passive: false });
   container.addEventListener("touchmove", handleTouchMove, { capture: true, passive: false });
-  container.addEventListener("touchend", handleTouchEnd, true);
-  container.addEventListener("touchcancel", handleTouchEnd, true);
+  container.addEventListener("touchend", handleTouchEnd, { capture: true });
+  container.addEventListener("touchcancel", handleTouchEnd, { capture: true });
 
   return () => {
-    container.removeEventListener("touchstart", handleTouchStart, true);
-    container.removeEventListener("touchmove", handleTouchMove, true);
-    container.removeEventListener("touchend", handleTouchEnd, true);
-    container.removeEventListener("touchcancel", handleTouchEnd, true);
+    container.removeEventListener("touchstart", handleTouchStart, { capture: true });
+    container.removeEventListener("touchmove", handleTouchMove, { capture: true });
+    container.removeEventListener("touchend", handleTouchEnd, { capture: true });
+    container.removeEventListener("touchcancel", handleTouchEnd, { capture: true });
   };
 }
 
