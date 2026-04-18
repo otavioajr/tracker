@@ -4,9 +4,9 @@
 
 **Goal:** Adicionar rotação efêmera ao mapa principal do dashboard com `Ctrl + drag` no desktop, dois dedos no touch, botão "Norte" condicional, preservação do follow durante rotação e rollback via feature flag.
 
-**Architecture:** Mantém Leaflet 1.9 + react-leaflet 5 e adiciona um `MapRotationController` irmão do `MapController` atual, atrás da flag `NEXT_PUBLIC_ENABLE_MAP_ROTATION`. Um ref compartilhado (`rotationInteractionRef`) sinaliza "gesture de rotação ativa" para o `MapController` não cancelar follow. Bearing é puramente local — nada persiste.
+**Architecture:** Substitui o pacote `leaflet` pelo fork `leaflet-rotate-map` (BSD-2-Clause, mesmo Leaflet 1.9 com `rotate: true`, `getBearing`/`setBearing` e evento `rotate`) via alias npm, para não quebrar `react-leaflet`. Os gestos (Ctrl+drag e 2 dedos) são implementados no próprio `MapRotationController`, irmão do `MapController`. Um ref compartilhado (`rotationInteractionRef`) marca "gesture ativa" para o `MapController` não cancelar follow. Bearing é 100% local e volta a zero no reload.
 
-**Tech Stack:** Next.js App Router 16, React 19, Leaflet 1.9, react-leaflet 5, `leaflet-rotate` plugin, Vitest + Testing Library, npm.
+**Tech Stack:** Next.js App Router 16, React 19, Leaflet 1.9 (via fork), react-leaflet 5, Vitest + Testing Library, npm.
 
 ---
 
@@ -15,36 +15,36 @@
 ### Modified files
 
 - `web/package.json`
-  Purpose: registra dependência `leaflet-rotate`.
+  Purpose: aliasa `leaflet` para `npm:leaflet-rotate-map@0.3.1`.
 - `web/package-lock.json`
-  Purpose: lock da dependência.
+  Purpose: lock do alias.
 - `web/.env.local.example`
-  Purpose: documenta a flag `NEXT_PUBLIC_ENABLE_MAP_ROTATION` desligada por padrão.
+  Purpose: documenta `NEXT_PUBLIC_ENABLE_MAP_ROTATION` desligada por padrão.
 - `web/src/app/(dashboard)/dashboard-map.tsx`
-  Purpose: lê a flag, mantém `mapBearing` e `resetRotationTrigger`, renderiza o botão "Norte" condicional, propaga props para `TrackingMap`.
+  Purpose: lê flag, mantém `mapBearing` e `resetRotationTrigger`, renderiza botão "Norte" condicional, propaga props.
 - `web/src/app/(dashboard)/dashboard-map.test.tsx`
-  Purpose: cobre flag off/on e o fluxo do botão "Norte" via `TrackingMapStub` com props de rotação.
+  Purpose: cobre flag off/on e fluxo do botão "Norte" via stub.
 - `web/src/components/map/tracking-map.tsx`
-  Purpose: aceita props de rotação, cria `rotationInteractionRef`, monta `MapRotationController` como irmão do `MapController` e passa o ref para ambos.
+  Purpose: passa `rotate={rotationEnabled}` ao `MapContainer`, cria `rotationInteractionRef`, monta `MapRotationController`.
 - `web/src/components/map/map-controller.tsx`
   Purpose: aceita `interactionStateRef`, consulta `isRotating` no handler de `dragstart`, preserva bearing em `fitBounds`.
 - `web/src/components/map/map-controller.test.ts`
-  Purpose: cobre a guarda `shouldCancelFollowOnMapDrag`.
+  Purpose: cobre `shouldCancelFollowOnMapDrag`.
 
 ### New files
 
 - `web/src/lib/map/map-rotation-feature.ts`
-  Purpose: parser puro da env var `NEXT_PUBLIC_ENABLE_MAP_ROTATION`.
+  Purpose: parser puro de `NEXT_PUBLIC_ENABLE_MAP_ROTATION`.
 - `web/src/lib/map/map-rotation-feature.test.ts`
   Purpose: cobre truthy/falsey do parser.
 - `web/src/components/map/map-rotation-controller.tsx`
-  Purpose: integra `leaflet-rotate`, expõe `normalizeMapBearing`, `supportsMapRotation`, `bindRotationHandlers` e o componente `MapRotationController`.
+  Purpose: integra o fork, expõe helpers puros e o componente `MapRotationController` com gestos customizados.
 - `web/src/components/map/map-rotation-controller.test.ts`
-  Purpose: cobre `normalizeMapBearing`, `supportsMapRotation` e `bindRotationHandlers` com mapa stub.
+  Purpose: cobre `normalizeMapBearing`, `supportsMapRotation`, `angleBetweenPoints`, `angleDelta`, `attachCtrlDragRotation`, `attachTouchRotation`.
 
 ---
 
-## Task 1: Validate plugin, install, add feature flag helper
+## Task 1: Install the Leaflet rotation fork via npm alias and add the feature flag helper
 
 **Files:**
 - Modify: `web/package.json`
@@ -53,37 +53,37 @@
 - Create: `web/src/lib/map/map-rotation-feature.ts`
 - Create: `web/src/lib/map/map-rotation-feature.test.ts`
 
-- [ ] **Step 1: Validate plugin metadata before installing**
+- [ ] **Step 1: Install the fork as an alias for `leaflet`**
+
+Nota: a licença do fork já foi validada em 2026-04-18 (BSD-2-Clause, `leaflet-rotate-map@0.3.1`). O fork é o próprio Leaflet 1.9 com a branch `rotate` integrada, então substituir o pacote `leaflet` por ele mantém a API pública e preserva o `react-leaflet` 5.
 
 Rodar a partir de `web/`:
 
 ```bash
-npm view leaflet-rotate name version license repository.url
+npm install leaflet@npm:leaflet-rotate-map@0.3.1 --save-exact
 ```
 
-Esperado: saída contém nome do pacote, uma versão real, uma licença permissiva (MIT/BSD/Apache) e URL do repositório acessível. Se a licença for incompatível (GPL, proprietária) ou o pacote estiver claramente abandonado, **pare e volte à spec** — não tente rotação via CSS.
+Esperado: `package.json` mostra `"leaflet": "npm:leaflet-rotate-map@0.3.1"` e `package-lock.json` atualizado.
 
-- [ ] **Step 2: Install the dependency**
+- [ ] **Step 2: Smoke test que o fork expõe a API de rotação**
 
 Rodar a partir de `web/`:
 
 ```bash
-npm install leaflet-rotate --save
+node -e "const L = require('leaflet'); console.log({ proto: !!L.Map.prototype.setBearing && !!L.Map.prototype.getBearing });"
 ```
 
-Esperado: `package.json` e `package-lock.json` atualizados com `leaflet-rotate` em `dependencies`.
+Esperado: `{ proto: true }`. Se falhar, reportar BLOCKED — sem a API não há como seguir.
 
 - [ ] **Step 3: Document the feature flag in the env example**
 
-Editar `web/.env.local.example` adicionando ao final:
+Editar `web/.env.local.example` acrescentando ao final:
 
 ```dotenv
 
 # Map rotation (0 = disabled, 1 = enabled)
 NEXT_PUBLIC_ENABLE_MAP_ROTATION=0
 ```
-
-Esperado: linha de comentário + linha com o valor default `0`.
 
 - [ ] **Step 4: Write the failing feature-flag test**
 
@@ -113,8 +113,6 @@ describe("isDashboardMapRotationEnabled", () => {
 
 - [ ] **Step 5: Run the feature-flag test to verify it fails**
 
-Rodar a partir de `web/`:
-
 ```bash
 npm test -- src/lib/map/map-rotation-feature.test.ts
 ```
@@ -137,15 +135,13 @@ export function isDashboardMapRotationEnabled(
 
 - [ ] **Step 7: Run the feature-flag test to verify it passes**
 
-Rodar a partir de `web/`:
-
 ```bash
 npm test -- src/lib/map/map-rotation-feature.test.ts
 ```
 
-Esperado: PASS em todos os casos truthy/falsey.
+Esperado: PASS.
 
-- [ ] **Step 8: Commit the dependency and flag groundwork**
+- [ ] **Step 8: Commit the groundwork**
 
 Rodar a partir da raiz do repositório:
 
@@ -153,12 +149,12 @@ Rodar a partir da raiz do repositório:
 git add web/package.json web/package-lock.json web/.env.local.example \
   web/src/lib/map/map-rotation-feature.ts \
   web/src/lib/map/map-rotation-feature.test.ts
-git commit -m "chore: adiciona dependencia e flag da rotacao do mapa"
+git commit -m "chore: aliasa leaflet para fork com rotacao e adiciona flag"
 ```
 
 ---
 
-## Task 2: Build the rotation controller in isolation (TDD)
+## Task 2: Build the rotation controller with custom gesture handlers (TDD)
 
 **Files:**
 - Create: `web/src/components/map/map-rotation-controller.tsx`
@@ -174,38 +170,35 @@ Criar `web/src/components/map/map-rotation-controller.test.ts`:
 import { describe, expect, it, vi } from "vitest";
 
 import {
-  bindRotationHandlers,
+  angleBetweenPoints,
+  angleDelta,
+  attachCtrlDragRotation,
+  attachTouchRotation,
   normalizeMapBearing,
   supportsMapRotation,
 } from "./map-rotation-controller";
 
-function createRotationMapStub() {
-  const handlers = new Map<string, Set<() => void>>();
+function createMapStub() {
+  let bearing = 0;
+  const container = document.createElement("div");
+  Object.defineProperty(container, "getBoundingClientRect", {
+    value: () => ({ left: 0, top: 0, width: 200, height: 200, right: 200, bottom: 200, x: 0, y: 0, toJSON: () => ({}) }),
+  });
+  document.body.appendChild(container);
+
   const map = {
-    dragRotate: { enable: vi.fn(), disable: vi.fn() },
-    touchRotate: { enable: vi.fn(), disable: vi.fn() },
-    getBearing: vi.fn(() => -90),
-    setBearing: vi.fn(),
-    on: vi.fn((event: string, handler: () => void) => {
-      const current = handlers.get(event) ?? new Set<() => void>();
-      current.add(handler);
-      handlers.set(event, current);
-      return map;
+    getContainer: () => container,
+    getBearing: vi.fn(() => bearing),
+    setBearing: vi.fn((value: number) => {
+      bearing = value;
     }),
-    off: vi.fn((event: string, handler: () => void) => {
-      handlers.get(event)?.delete(handler);
-      return map;
-    }),
-    emit(event: string) {
-      handlers.get(event)?.forEach((handler) => handler());
-    },
   };
 
-  return map;
+  return { map, container };
 }
 
 describe("map-rotation-controller helpers", () => {
-  it("normalizes negative and overflow bearings to the 0-360 range", () => {
+  it("normalizes bearings to the 0-360 range", () => {
     expect(normalizeMapBearing(-90)).toBe(270);
     expect(normalizeMapBearing(-450)).toBe(270);
     expect(normalizeMapBearing(0)).toBe(0);
@@ -213,21 +206,17 @@ describe("map-rotation-controller helpers", () => {
     expect(normalizeMapBearing(450)).toBe(90);
   });
 
-  it("detects maps missing any of the rotation primitives", () => {
+  it("detects maps missing getBearing or setBearing", () => {
     expect(supportsMapRotation({})).toBe(false);
     expect(
       supportsMapRotation({
-        dragRotate: { enable() {}, disable() {} },
         getBearing() {
           return 0;
         },
-        setBearing() {},
       })
     ).toBe(false);
     expect(
       supportsMapRotation({
-        dragRotate: { enable() {}, disable() {} },
-        touchRotate: { enable() {}, disable() {} },
         getBearing() {
           return 0;
         },
@@ -236,29 +225,133 @@ describe("map-rotation-controller helpers", () => {
     ).toBe(true);
   });
 
-  it("tracks rotation state and reports normalized bearings via bindRotationHandlers", () => {
-    const map = createRotationMapStub();
+  it("computes the angle between a point and the container center in degrees", () => {
+    const center = { x: 100, y: 100 };
+    expect(angleBetweenPoints(center, { x: 200, y: 100 })).toBeCloseTo(0);
+    expect(angleBetweenPoints(center, { x: 100, y: 200 })).toBeCloseTo(90);
+    expect(angleBetweenPoints(center, { x: 0, y: 100 })).toBeCloseTo(180);
+    expect(angleBetweenPoints(center, { x: 100, y: 0 })).toBeCloseTo(-90);
+  });
+
+  it("wraps angle deltas into the -180..180 range", () => {
+    expect(angleDelta(10, 20)).toBeCloseTo(10);
+    expect(angleDelta(350, 10)).toBeCloseTo(20);
+    expect(angleDelta(10, 350)).toBeCloseTo(-20);
+    expect(angleDelta(-170, 170)).toBeCloseTo(-20);
+  });
+
+  it("tracks ctrl+drag rotation gestures end-to-end", () => {
+    const { map, container } = createMapStub();
     const interactionStateRef = { current: { isRotating: false } };
     const onBearingChange = vi.fn();
 
-    const cleanup = bindRotationHandlers({
+    const cleanup = attachCtrlDragRotation({
       map,
       interactionStateRef,
       onBearingChange,
     });
 
-    map.emit("rotatestart");
+    const down = new MouseEvent("mousedown", {
+      clientX: 200,
+      clientY: 100,
+      button: 0,
+      ctrlKey: true,
+      bubbles: true,
+      cancelable: true,
+    });
+    container.dispatchEvent(down);
     expect(interactionStateRef.current.isRotating).toBe(true);
 
-    map.emit("rotate");
-    expect(onBearingChange).toHaveBeenLastCalledWith(270);
+    const move = new MouseEvent("mousemove", {
+      clientX: 100,
+      clientY: 200,
+      bubbles: true,
+    });
+    document.dispatchEvent(move);
+    expect(map.setBearing).toHaveBeenLastCalledWith(expect.any(Number));
+    expect(onBearingChange).toHaveBeenLastCalledWith(expect.any(Number));
+    expect(onBearingChange.mock.lastCall?.[0]).toBeGreaterThan(0);
 
-    map.emit("rotateend");
+    const up = new MouseEvent("mouseup", { bubbles: true });
+    document.dispatchEvent(up);
     expect(interactionStateRef.current.isRotating).toBe(false);
-    expect(onBearingChange).toHaveBeenLastCalledWith(270);
 
     cleanup();
-    expect(map.off).toHaveBeenCalledTimes(3);
+    container.remove();
+  });
+
+  it("ignores mousedown without Ctrl or on non-primary buttons", () => {
+    const { map, container } = createMapStub();
+    const interactionStateRef = { current: { isRotating: false } };
+    const onBearingChange = vi.fn();
+
+    const cleanup = attachCtrlDragRotation({
+      map,
+      interactionStateRef,
+      onBearingChange,
+    });
+
+    container.dispatchEvent(
+      new MouseEvent("mousedown", {
+        clientX: 200,
+        clientY: 100,
+        button: 0,
+        ctrlKey: false,
+        bubbles: true,
+      })
+    );
+    expect(interactionStateRef.current.isRotating).toBe(false);
+
+    container.dispatchEvent(
+      new MouseEvent("mousedown", {
+        clientX: 200,
+        clientY: 100,
+        button: 2,
+        ctrlKey: true,
+        bubbles: true,
+      })
+    );
+    expect(interactionStateRef.current.isRotating).toBe(false);
+    expect(map.setBearing).not.toHaveBeenCalled();
+
+    cleanup();
+    container.remove();
+  });
+
+  it("tracks two-finger touch rotation gestures end-to-end", () => {
+    const { map, container } = createMapStub();
+    const interactionStateRef = { current: { isRotating: false } };
+    const onBearingChange = vi.fn();
+
+    const cleanup = attachTouchRotation({
+      map,
+      interactionStateRef,
+      onBearingChange,
+    });
+
+    function fireTouch(type: string, touches: Array<{ clientX: number; clientY: number }>) {
+      const event = new Event(type, { bubbles: true, cancelable: true });
+      Object.defineProperty(event, "touches", { value: touches });
+      container.dispatchEvent(event);
+    }
+
+    fireTouch("touchstart", [
+      { clientX: 50, clientY: 100 },
+      { clientX: 150, clientY: 100 },
+    ]);
+    expect(interactionStateRef.current.isRotating).toBe(true);
+
+    fireTouch("touchmove", [
+      { clientX: 100, clientY: 50 },
+      { clientX: 100, clientY: 150 },
+    ]);
+    expect(map.setBearing).toHaveBeenCalled();
+
+    fireTouch("touchend", [{ clientX: 100, clientY: 50 }]);
+    expect(interactionStateRef.current.isRotating).toBe(false);
+
+    cleanup();
+    container.remove();
   });
 });
 ```
@@ -271,7 +364,7 @@ Rodar a partir de `web/`:
 npm test -- src/components/map/map-rotation-controller.test.ts
 ```
 
-Esperado: FAIL com "Cannot find module './map-rotation-controller'".
+Esperado: FAIL por ausência do módulo.
 
 - [ ] **Step 3: Implement the rotation controller**
 
@@ -279,8 +372,6 @@ Criar `web/src/components/map/map-rotation-controller.tsx`:
 
 ```tsx
 "use client";
-
-import "leaflet-rotate";
 
 import { useEffect } from "react";
 import { useMap } from "react-leaflet";
@@ -292,13 +383,14 @@ type RotationInteractionRef = {
 };
 
 type RotatableMap = {
-  dragRotate?: { enable(): void; disable(): void };
-  touchRotate?: { enable(): void; disable(): void };
-  getBearing?: () => number;
-  setBearing?: (bearing: number) => void;
-  on: (event: string, handler: () => void) => unknown;
-  off: (event: string, handler: () => void) => unknown;
+  getContainer: () => HTMLElement;
+  getBearing: () => number;
+  setBearing: (theta: number) => void;
+  on?: (event: string, handler: () => void) => unknown;
+  off?: (event: string, handler: () => void) => unknown;
 };
+
+type Point = { x: number; y: number };
 
 export function normalizeMapBearing(rawBearing: number) {
   const normalized = rawBearing % 360;
@@ -306,44 +398,151 @@ export function normalizeMapBearing(rawBearing: number) {
 }
 
 export function supportsMapRotation(map: Partial<RotatableMap>) {
-  return Boolean(
-    map.dragRotate &&
-      map.touchRotate &&
-      typeof map.getBearing === "function" &&
-      typeof map.setBearing === "function"
+  return (
+    typeof map.getBearing === "function" &&
+    typeof map.setBearing === "function"
   );
 }
 
-export function bindRotationHandlers({
-  map,
-  interactionStateRef,
-  onBearingChange,
-}: {
+export function angleBetweenPoints(center: Point, point: Point) {
+  return (Math.atan2(point.y - center.y, point.x - center.x) * 180) / Math.PI;
+}
+
+export function angleDelta(from: number, to: number) {
+  let delta = to - from;
+  while (delta > 180) delta -= 360;
+  while (delta <= -180) delta += 360;
+  return delta;
+}
+
+function containerCenter(container: HTMLElement) {
+  const rect = container.getBoundingClientRect();
+  return { x: rect.width / 2, y: rect.height / 2 };
+}
+
+function pointerToContainer(
+  container: HTMLElement,
+  clientX: number,
+  clientY: number
+) {
+  const rect = container.getBoundingClientRect();
+  return { x: clientX - rect.left, y: clientY - rect.top };
+}
+
+type GestureBindingArgs = {
   map: RotatableMap;
   interactionStateRef: RotationInteractionRef;
   onBearingChange: (bearing: number) => void;
-}) {
-  const handleRotationStart = () => {
+};
+
+export function attachCtrlDragRotation({
+  map,
+  interactionStateRef,
+  onBearingChange,
+}: GestureBindingArgs) {
+  const container = map.getContainer();
+  let active = false;
+  let lastAngle = 0;
+
+  const handleMouseDown = (event: MouseEvent) => {
+    if (!event.ctrlKey || event.button !== 0) {
+      return;
+    }
+    event.stopPropagation();
+    event.preventDefault();
+    active = true;
     interactionStateRef.current.isRotating = true;
+    const point = pointerToContainer(container, event.clientX, event.clientY);
+    lastAngle = angleBetweenPoints(containerCenter(container), point);
+    document.addEventListener("mousemove", handleMouseMove, true);
+    document.addEventListener("mouseup", handleMouseUp, true);
   };
 
-  const handleRotation = () => {
-    onBearingChange(normalizeMapBearing(map.getBearing?.() ?? 0));
+  const handleMouseMove = (event: MouseEvent) => {
+    if (!active) return;
+    const point = pointerToContainer(container, event.clientX, event.clientY);
+    const angle = angleBetweenPoints(containerCenter(container), point);
+    const delta = angleDelta(lastAngle, angle);
+    lastAngle = angle;
+    const next = map.getBearing() + delta;
+    map.setBearing(next);
+    onBearingChange(normalizeMapBearing(next));
   };
 
-  const handleRotationEnd = () => {
+  const handleMouseUp = () => {
+    if (!active) return;
+    active = false;
     interactionStateRef.current.isRotating = false;
-    onBearingChange(normalizeMapBearing(map.getBearing?.() ?? 0));
+    onBearingChange(normalizeMapBearing(map.getBearing()));
+    document.removeEventListener("mousemove", handleMouseMove, true);
+    document.removeEventListener("mouseup", handleMouseUp, true);
   };
 
-  map.on("rotatestart", handleRotationStart);
-  map.on("rotate", handleRotation);
-  map.on("rotateend", handleRotationEnd);
+  container.addEventListener("mousedown", handleMouseDown, true);
 
   return () => {
-    map.off("rotatestart", handleRotationStart);
-    map.off("rotate", handleRotation);
-    map.off("rotateend", handleRotationEnd);
+    container.removeEventListener("mousedown", handleMouseDown, true);
+    document.removeEventListener("mousemove", handleMouseMove, true);
+    document.removeEventListener("mouseup", handleMouseUp, true);
+  };
+}
+
+export function attachTouchRotation({
+  map,
+  interactionStateRef,
+  onBearingChange,
+}: GestureBindingArgs) {
+  const container = map.getContainer();
+  let active = false;
+  let lastAngle = 0;
+
+  const angleForTouches = (touches: ArrayLike<{ clientX: number; clientY: number }>) => {
+    const a = pointerToContainer(container, touches[0].clientX, touches[0].clientY);
+    const b = pointerToContainer(container, touches[1].clientX, touches[1].clientY);
+    return (Math.atan2(b.y - a.y, b.x - a.x) * 180) / Math.PI;
+  };
+
+  const handleTouchStart = (event: Event) => {
+    const touchEvent = event as unknown as { touches: ArrayLike<{ clientX: number; clientY: number }> };
+    if (!touchEvent.touches || touchEvent.touches.length !== 2) return;
+    event.stopPropagation();
+    active = true;
+    interactionStateRef.current.isRotating = true;
+    lastAngle = angleForTouches(touchEvent.touches);
+  };
+
+  const handleTouchMove = (event: Event) => {
+    const touchEvent = event as unknown as { touches: ArrayLike<{ clientX: number; clientY: number }> };
+    if (!active || !touchEvent.touches || touchEvent.touches.length !== 2) return;
+    event.stopPropagation();
+    event.preventDefault();
+    const angle = angleForTouches(touchEvent.touches);
+    const delta = angleDelta(lastAngle, angle);
+    lastAngle = angle;
+    const next = map.getBearing() + delta;
+    map.setBearing(next);
+    onBearingChange(normalizeMapBearing(next));
+  };
+
+  const handleTouchEnd = (event: Event) => {
+    const touchEvent = event as unknown as { touches: ArrayLike<unknown> };
+    if (!active) return;
+    if (touchEvent.touches && touchEvent.touches.length >= 2) return;
+    active = false;
+    interactionStateRef.current.isRotating = false;
+    onBearingChange(normalizeMapBearing(map.getBearing()));
+  };
+
+  container.addEventListener("touchstart", handleTouchStart, { capture: true, passive: false });
+  container.addEventListener("touchmove", handleTouchMove, { capture: true, passive: false });
+  container.addEventListener("touchend", handleTouchEnd, true);
+  container.addEventListener("touchcancel", handleTouchEnd, true);
+
+  return () => {
+    container.removeEventListener("touchstart", handleTouchStart, true);
+    container.removeEventListener("touchmove", handleTouchMove, true);
+    container.removeEventListener("touchend", handleTouchEnd, true);
+    container.removeEventListener("touchcancel", handleTouchEnd, true);
   };
 }
 
@@ -367,21 +566,22 @@ export function MapRotationController({
       return;
     }
 
-    map.dragRotate?.enable();
-    map.touchRotate?.enable();
-
-    const cleanup = bindRotationHandlers({
+    const detachCtrlDrag = attachCtrlDragRotation({
+      map,
+      interactionStateRef,
+      onBearingChange,
+    });
+    const detachTouch = attachTouchRotation({
       map,
       interactionStateRef,
       onBearingChange,
     });
 
-    onBearingChange(normalizeMapBearing(map.getBearing?.() ?? 0));
+    onBearingChange(normalizeMapBearing(map.getBearing()));
 
     return () => {
-      cleanup();
-      map.dragRotate?.disable();
-      map.touchRotate?.disable();
+      detachCtrlDrag();
+      detachTouch();
       interactionStateRef.current.isRotating = false;
       onBearingChange(0);
     };
@@ -392,7 +592,7 @@ export function MapRotationController({
       return;
     }
 
-    map.setBearing?.(0);
+    map.setBearing(0);
     onBearingChange(0);
   }, [enabled, map, onBearingChange, resetRotationTrigger]);
 
@@ -402,27 +602,23 @@ export function MapRotationController({
 
 - [ ] **Step 4: Run the controller tests to verify they pass**
 
-Rodar a partir de `web/`:
-
 ```bash
 npm test -- src/components/map/map-rotation-controller.test.ts
 ```
 
-Esperado: PASS em normalização, detecção de capacidade e bind/cleanup dos handlers.
+Esperado: PASS em todos os blocos.
 
-- [ ] **Step 5: Commit the isolated rotation controller**
-
-Rodar a partir da raiz do repositório:
+- [ ] **Step 5: Commit the controller**
 
 ```bash
 git add web/src/components/map/map-rotation-controller.tsx \
   web/src/components/map/map-rotation-controller.test.ts
-git commit -m "feat: adiciona controlador isolado de rotacao do mapa"
+git commit -m "feat: adiciona controlador de rotacao com gestos customizados"
 ```
 
 ---
 
-## Task 3: Wire rotation state and reset button through the dashboard map
+## Task 3: Wire rotation into DashboardMap + TrackingMap
 
 **Files:**
 - Modify: `web/src/app/(dashboard)/dashboard-map.tsx`
@@ -431,7 +627,7 @@ git commit -m "feat: adiciona controlador isolado de rotacao do mapa"
 
 - [ ] **Step 1: Extend the dashboard map test with rotation-state expectations**
 
-Editar `web/src/app/(dashboard)/dashboard-map.test.tsx`. Substituir o `TrackingMapStub` existente por esta versão que aceita as novas props:
+Editar `web/src/app/(dashboard)/dashboard-map.test.tsx`. Substituir o `TrackingMapStub` atual por:
 
 ```tsx
 function TrackingMapStub({
@@ -485,7 +681,7 @@ function TrackingMapStub({
 }
 ```
 
-Adicionar os casos de rotação dentro do bloco `describe("DashboardMap", ...)`:
+Adicionar os casos dentro do `describe("DashboardMap", ...)`:
 
 ```tsx
 it("keeps rotation disabled when the feature flag is off", async () => {
@@ -517,19 +713,17 @@ it("shows the reset-to-north button only after the map reports a non-zero bearin
 
 - [ ] **Step 2: Run the dashboard map test to verify it fails**
 
-Rodar a partir de `web/`:
-
 ```bash
 npm test -- 'src/app/(dashboard)/dashboard-map.test.tsx'
 ```
 
-Esperado: FAIL — `rotation-enabled:no` não renderiza e não existe botão "Resetar norte".
+Esperado: FAIL — `rotation-enabled:no` não renderiza e botão "Resetar norte" não existe.
 
 - [ ] **Step 3: Implement rotation state and the reset button in DashboardMap**
 
 Editar `web/src/app/(dashboard)/dashboard-map.tsx`.
 
-Atualizar os imports no topo do arquivo:
+Atualizar imports:
 
 ```tsx
 import { Compass, MapPinned, PanelRightClose } from "lucide-react";
@@ -537,7 +731,7 @@ import { Compass, MapPinned, PanelRightClose } from "lucide-react";
 import { isDashboardMapRotationEnabled } from "@/lib/map/map-rotation-feature";
 ```
 
-Dentro de `DashboardMap`, logo após os `useState` existentes (a sequência atual termina em `setFitAllTrigger`), adicionar:
+Dentro de `DashboardMap`, logo após os `useState` existentes (após `setFitAllTrigger`), adicionar:
 
 ```tsx
 const rotationEnabled = isDashboardMapRotationEnabled();
@@ -546,7 +740,7 @@ const [resetRotationTrigger, setResetRotationTrigger] = useState(0);
 const showResetRotation = rotationEnabled && Math.abs(mapBearing) > 0.5;
 ```
 
-Substituir o bloco `<TrackingMap ... />` atual por este, adicionando três props novas:
+Substituir o `<TrackingMap ... />` atual por:
 
 ```tsx
 <TrackingMap
@@ -565,7 +759,7 @@ Substituir o bloco `<TrackingMap ... />` atual por este, adicionando três props
 />
 ```
 
-Logo abaixo do botão `"Ver todos"` (fim do JSX onde o botão com `onClick={handleFitAll}` é renderizado), adicionar o botão de reset condicional:
+Logo abaixo do botão `"Ver todos"` (o `<button type="button" onClick={handleFitAll} ...>`), adicionar o botão de reset:
 
 ```tsx
 {showResetRotation ? (
@@ -581,11 +775,11 @@ Logo abaixo do botão `"Ver todos"` (fim do JSX onde o botão com `onClick={hand
 ) : null}
 ```
 
-- [ ] **Step 4: Extend TrackingMap to wire the rotation controller**
+- [ ] **Step 4: Extend TrackingMap to pass `rotate` and mount the rotation controller**
 
 Editar `web/src/components/map/tracking-map.tsx`.
 
-Atualizar os imports:
+Atualizar imports no topo do arquivo:
 
 ```tsx
 "use client";
@@ -596,7 +790,7 @@ import { useRef } from "react";
 import type { DashboardVehicleTrail, VehiclePosition } from "./types";
 ```
 
-Logo abaixo dos outros `dynamic(...)` existentes (depois de `MapControllerDynamic`), adicionar o import dinâmico do novo controlador:
+Logo abaixo do `MapControllerDynamic`, adicionar:
 
 ```tsx
 const MapRotationControllerDynamic = dynamic(
@@ -625,7 +819,7 @@ export type TrackingMapProps = {
 };
 ```
 
-Atualizar a desestruturação e o corpo do componente. Substituir a assinatura atual por:
+Atualizar a assinatura de `TrackingMap` e adicionar o ref compartilhado:
 
 ```tsx
 export function TrackingMap({
@@ -650,6 +844,20 @@ export function TrackingMap({
   const rotationInteractionRef = useRef({ isRotating: false });
 ```
 
+Substituir o bloco `<MapContainer ...>` para passar a opção `rotate`:
+
+```tsx
+<MapContainer
+  center={center}
+  zoom={12}
+  style={{ width: "100%", height: "100%", minHeight: 400 }}
+  className={className}
+  {...({ rotate: rotationEnabled } as Record<string, unknown>)}
+>
+```
+
+Nota: o spread typed-cast é necessário porque os tipos de `react-leaflet` não declaram `rotate`; a prop chega ao `L.map()` via runtime options.
+
 Atualizar a chamada do `MapControllerDynamic` para passar o ref:
 
 ```tsx
@@ -662,7 +870,7 @@ Atualizar a chamada do `MapControllerDynamic` para passar o ref:
 />
 ```
 
-Logo abaixo do `MapControllerDynamic`, adicionar o novo controlador:
+Abaixo, adicionar o novo controlador:
 
 ```tsx
 <MapRotationControllerDynamic
@@ -675,23 +883,19 @@ Logo abaixo do `MapControllerDynamic`, adicionar o novo controlador:
 
 - [ ] **Step 5: Run the dashboard map test to verify it passes**
 
-Rodar a partir de `web/`:
-
 ```bash
 npm test -- 'src/app/(dashboard)/dashboard-map.test.tsx'
 ```
 
-Esperado: PASS — flag off esconde botão, flag on mostra o botão só após bearing ≠ 0, clicar avança `resetRotationTrigger`, voltar bearing a 0 esconde o botão.
+Esperado: PASS — flag off oculta botão, flag on mostra botão só após bearing ≠ 0, clique incrementa trigger, voltar a 0 oculta o botão.
 
-- [ ] **Step 6: Commit the dashboard integration**
-
-Rodar a partir da raiz do repositório:
+- [ ] **Step 6: Commit the integration**
 
 ```bash
 git add 'web/src/app/(dashboard)/dashboard-map.tsx' \
   'web/src/app/(dashboard)/dashboard-map.test.tsx' \
   web/src/components/map/tracking-map.tsx
-git commit -m "feat: integra bearing e botao norte no dashboard"
+git commit -m "feat: integra rotacao no dashboard map"
 ```
 
 ---
@@ -704,13 +908,13 @@ git commit -m "feat: integra bearing e botao norte no dashboard"
 
 - [ ] **Step 1: Add the failing drag-cancel guard test**
 
-Editar `web/src/components/map/map-controller.test.ts`. Adicionar este import e teste ao final do arquivo, antes do fechamento do `describe`:
+Editar `web/src/components/map/map-controller.test.ts`. Adicionar no topo:
 
 ```ts
 import { shouldCancelFollowOnMapDrag } from "./map-controller";
 ```
 
-Adicionar, ainda dentro do `describe("map-controller", ...)`:
+Adicionar dentro do `describe("map-controller", ...)`:
 
 ```ts
 it("only cancels follow when no rotation gesture is active", () => {
@@ -719,9 +923,7 @@ it("only cancels follow when no rotation gesture is active", () => {
 });
 ```
 
-- [ ] **Step 2: Run the map controller test to verify it fails**
-
-Rodar a partir de `web/`:
+- [ ] **Step 2: Run the test to verify it fails**
 
 ```bash
 npm test -- src/components/map/map-controller.test.ts
@@ -733,7 +935,7 @@ Esperado: FAIL — `shouldCancelFollowOnMapDrag` não existe.
 
 Editar `web/src/components/map/map-controller.tsx`.
 
-Adicionar, entre `import type { VehiclePosition } from "./types";` e a declaração de `MapControllerProps`, a função pura:
+Adicionar, logo após `import type { VehiclePosition } from "./types";`:
 
 ```tsx
 export function shouldCancelFollowOnMapDrag(isRotationGestureActive: boolean) {
@@ -747,7 +949,7 @@ type MapInteractionRef = {
 };
 ```
 
-Estender `MapControllerProps` com o novo campo:
+Estender `MapControllerProps`:
 
 ```tsx
 type MapControllerProps = {
@@ -771,7 +973,7 @@ export function MapController({
 }: MapControllerProps) {
 ```
 
-Substituir o `useEffect` que faz bind do `dragstart` por esta versão com guarda:
+Substituir o `useEffect` do `dragstart` por:
 
 ```tsx
 // Drag exits follow mode unless the user is currently rotating the map.
@@ -789,7 +991,7 @@ useEffect(() => {
 }, [map, interactionStateRef]);
 ```
 
-No `useEffect` do fit all (o que chama `map.fitBounds(...)`), adicionar save/restore de bearing como rede de proteção. Substituir o bloco:
+No `useEffect` do fit all, substituir o bloco:
 
 ```tsx
 if (action.type === "fit-bounds") {
@@ -827,9 +1029,7 @@ if (action.type === "fit-bounds") {
 }
 ```
 
-- [ ] **Step 4: Run the targeted tests and lint to verify the full slice**
-
-Rodar a partir de `web/`:
+- [ ] **Step 4: Run the targeted tests and lint**
 
 ```bash
 npm test -- src/lib/map/map-rotation-feature.test.ts \
@@ -840,8 +1040,6 @@ npm test -- src/lib/map/map-rotation-feature.test.ts \
 
 Esperado: todos PASS.
 
-Rodar lint:
-
 ```bash
 npm run lint -- src/lib/map/map-rotation-feature.ts \
   src/components/map/map-rotation-controller.tsx \
@@ -850,11 +1048,9 @@ npm run lint -- src/lib/map/map-rotation-feature.ts \
   'src/app/(dashboard)/dashboard-map.tsx'
 ```
 
-Esperado: finaliza sem novos erros nos arquivos tocados.
+Esperado: sem novos erros nos arquivos tocados.
 
-- [ ] **Step 5: Commit the follow-safe rotation behavior**
-
-Rodar a partir da raiz do repositório:
+- [ ] **Step 5: Commit**
 
 ```bash
 git add web/src/components/map/map-controller.tsx \
@@ -868,23 +1064,17 @@ git commit -m "fix: preserva follow durante rotacao e bearing em fit all"
 
 **Files:** nenhuma alteração de código.
 
-- [ ] **Step 1: Start dev server with the flag off and confirm the baseline**
+- [ ] **Step 1: Baseline com a flag desligada**
 
-Em `web/.env.local`, garantir ausência ou valor `0`:
+Garantir em `web/.env.local`:
 
 ```dotenv
 NEXT_PUBLIC_ENABLE_MAP_ROTATION=0
 ```
 
-Rodar a partir de `web/`:
+Rodar `npm run dev` em `web/` e confirmar: mapa se comporta como hoje; não aparece botão "Norte"; pan/drag normais; follow cancela com drag.
 
-```bash
-npm run dev
-```
-
-Abrir o dashboard e confirmar que o mapa se comporta exatamente como hoje: pan com drag, follow cancela no drag, "Ver todos" funciona, não aparece botão "Norte".
-
-- [ ] **Step 2: Turn the flag on and walk the happy path**
+- [ ] **Step 2: Happy path com a flag ligada**
 
 Parar o servidor, editar `web/.env.local`:
 
@@ -892,56 +1082,48 @@ Parar o servidor, editar `web/.env.local`:
 NEXT_PUBLIC_ENABLE_MAP_ROTATION=1
 ```
 
-Rodar `npm run dev` novamente e verificar na ordem:
+Rodar `npm run dev` e verificar:
 
 ```text
-1. Desktop: segurar Ctrl e arrastar com botão esquerdo rotaciona o mapa.
-2. Desktop: drag simples (sem Ctrl) continua fazendo pan, não rotaciona.
-3. Botao "Norte" aparece assim que o bearing sai de 0 e some quando volta.
+1. Desktop: Ctrl + botao esquerdo + arrastar rotaciona o mapa.
+2. Desktop: drag simples (sem Ctrl) continua fazendo pan, nao rotaciona.
+3. Botao "Norte" aparece assim que bearing sai de 0 e some ao voltar.
 4. Clicar "Norte" volta o mapa para north-up.
-5. Mobile/touch emulator: dois dedos girando rotacionam o mapa.
-6. Mobile: um dedo continua fazendo pan; pinca continua fazendo zoom.
-7. Selecionar um veiculo, entrar em follow, rotacionar: follow permanece ativo,
-   recentros de nova posicao continuam funcionando.
-8. "Ver todos" com o mapa rotacionado: centro e zoom se ajustam, bearing preservado.
-9. Markers clicaveis, popups abrindo e fechando com mapa rotacionado.
-10. Trilhas ativas continuam alinhadas ao mapa rotacionado.
-11. Recarregar a pagina: mapa abre em north-up.
+5. Touch emulator/tablet: dois dedos girando rotacionam; um dedo faz pan; pinca faz zoom.
+6. Entrar em follow, rotacionar: follow permanece ativo e recentros continuam.
+7. "Ver todos" com mapa rotacionado: so centro/zoom mudam, bearing mantido.
+8. Markers clicaveis e popups funcionam com mapa rotacionado.
+9. Trilhas ativas permanecem alinhadas ao mapa.
+10. Recarregar a pagina: mapa abre em north-up.
 ```
 
-Se algum dos pontos falhar, abrir issue de follow-up ou voltar à spec — não forçar ajustes ad-hoc.
+- [ ] **Step 3: Voltar a flag para 0**
 
-- [ ] **Step 2a: Verify safe fallback when the plugin fails to load**
-
-Simular falha temporariamente removendo o import do plugin: comentar a linha `import "leaflet-rotate";` em `web/src/components/map/map-rotation-controller.tsx`, recarregar o dashboard com a flag ligada e confirmar que o mapa ainda sobe em north-up, o botão "Norte" nunca aparece, e nada quebra.
-
-Restaurar o import após a verificação. Não commitar a simulação.
-
-- [ ] **Step 3: Turn the flag back off for default commits**
-
-Antes de encerrar, restaurar `web/.env.local`:
+Restaurar `web/.env.local`:
 
 ```dotenv
 NEXT_PUBLIC_ENABLE_MAP_ROTATION=0
 ```
 
-Esperado: ambiente default permanece em comportamento atual, a rotação só é ligada explicitamente.
+Esperado: default permanece em comportamento atual; rotação só é ligada explicitamente.
 
 ---
 
 ## Self-Review
 
 - **Spec coverage:**
-  - "Desktop Ctrl+drag" e "Mobile dois dedos" → Task 2 (controller) + Task 3 (integração) + Task 5 (verificação).
+  - "Desktop Ctrl+drag" → Task 2 (`attachCtrlDragRotation`) + Task 3 (integração) + Task 5.
+  - "Mobile dois dedos" → Task 2 (`attachTouchRotation`) + Task 3 + Task 5.
   - "Botão Norte só com bearing ≠ 0" → Task 3 (`showResetRotation` com tolerância 0.5°).
   - "Rotação não cancela follow" → Task 4 (`shouldCancelFollowOnMapDrag` + ref compartilhado).
   - "Ver todos mantém bearing" → Task 4 (save/restore em `fitBounds`).
-  - "Reload volta para norte" → bearing é `useState(0)` em `DashboardMap`, não há leitura de `localStorage` (Task 3).
-  - "Flag por env var com fallback silencioso" → Task 1 (helper + env example), Task 2 (`supportsMapRotation`), Task 5 step 2a (verificação de fallback).
-  - "Plugin isolado, rollback simples" → Task 2 mantém `import "leaflet-rotate"` contido no controller; remover o componente desfaz tudo sem mexer no resto.
+  - "Reload volta para norte" → bearing é `useState(0)` em `DashboardMap`, sem `localStorage` (Task 3).
+  - "Flag por env var" → Task 1 (helper + env example).
+  - "Capacidade ausente = fallback silencioso" → Task 2 (`supportsMapRotation`).
+  - "Plugin isolado, rollback simples" → Task 1 aliasa o pacote `leaflet`; Task 2 mantém gestos no controlador; sem a flag, `MapContainer` não recebe `rotate: true` e o fork age como Leaflet normal.
 
-- **Placeholder scan:** nenhum "TBD", "TODO", "handle appropriately" ou "similar to Task N" — cada step tem código ou comando explícito.
+- **Placeholder scan:** nenhum "TBD", "TODO", "similar to Task N" — todo passo traz comando ou código.
 
-- **Type consistency:** nomes `rotationEnabled`, `resetRotationTrigger`, `onBearingChange`, `interactionStateRef` e `isRotating` batem entre `DashboardMap`, `TrackingMap`, `MapRotationController`, `MapController` e os testes. `normalizeMapBearing`, `supportsMapRotation` e `bindRotationHandlers` são exportados e consumidos com as mesmas assinaturas em Task 2 e Task 3.
+- **Type consistency:** `rotationEnabled`, `resetRotationTrigger`, `onBearingChange`, `interactionStateRef`, `isRotating`, `normalizeMapBearing`, `supportsMapRotation`, `attachCtrlDragRotation`, `attachTouchRotation`, `shouldCancelFollowOnMapDrag` aparecem com mesmas assinaturas em produção e teste.
 
-- **Escopo:** um único feature slice (mapa principal do dashboard), entregue de forma incremental e com cobertura de rollback explícito via flag.
+- **Escopo:** um único feature slice (mapa principal do dashboard), entregue por TDD com commits atômicos e rollback por flag.

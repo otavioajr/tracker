@@ -40,9 +40,10 @@ Manter o mapa principal no Leaflet 1.9 e adicionar rotação como uma camada iso
 
 ## Alternativas Consideradas
 
-1. **Plugin `leaflet-rotate` sobre Leaflet 1.9** — alternativa recomendada para a v1. Mantém o mapa atual, expõe `dragRotate`, `touchRotate`, `getBearing`, `setBearing`. Exige validação prévia de licença, versão e compatibilidade com `react-leaflet` 5.
-2. **Migrar dashboard para MapLibre GL JS** — bearing nativo e base mais sólida a longo prazo, mas exige reescrever markers, trilhas, popups, layer control e tiles. Custo desproporcional para uma feature de bearing.
-3. **CSS transform no container do mapa** — quebra hit testing, popups, matemática de pan/zoom e gestures touch. Descartada por aumentar risco operacional.
+1. **Fork `leaflet-rotate-map` como substituto do pacote `leaflet`** (BSD-2-Clause) — alternativa recomendada. Fork do Leaflet 1.9 que adiciona `rotate: true` no construtor do mapa, `getBearing()`, `setBearing()`, evento `rotate`, rotação de markers/popups. Instalado via `npm alias` no nome `leaflet`, de modo que `react-leaflet` continua compatível. **Não** fornece gestos prontos (`dragRotate`/`touchRotate`) — os handlers Ctrl+drag e dois-dedos são implementados no `MapRotationController`.
+2. **Plugin `leaflet-rotate` original** — descartado: é **GPL-3.0**, incompatível com SaaS proprietário.
+3. **Migrar dashboard para MapLibre GL JS** — bearing nativo e base mais sólida a longo prazo, mas exige reescrever markers, trilhas, popups, layer control e tiles. Custo desproporcional para uma feature de bearing.
+4. **CSS transform no container do mapa** — quebra hit testing, popups, matemática de pan/zoom e gestures touch. Descartada por aumentar risco operacional.
 
 ## Escopo da V1
 
@@ -120,17 +121,24 @@ DashboardMap                         (dona da flag, bearing state, reset trigger
 
 `TrackingMap` segue responsável por montar `MapContainer`, layers, markers, trilhas. Passa a criar o `rotationInteractionRef` e a montar `MapRotationController` como irmão do `MapController`.
 
-`MapController` continua cuidando de follow, fit all e cancel por drag. Ganha uma prop `interactionStateRef` e consulta `isRotating` antes de cancelar follow no `dragstart`. Também precisa preservar bearing em `fitBounds`/`setView` (nativamente via plugin ou manualmente via salva-restaura).
+`MapController` continua cuidando de follow, fit all e cancel por drag. Ganha uma prop `interactionStateRef` e consulta `isRotating` antes de cancelar follow no `dragstart`. Também preserva bearing em `fitBounds` via salva-restaura explícito como rede de proteção.
 
-`MapRotationController` (novo) é o único lugar que toca no plugin `leaflet-rotate`. Responsabilidades:
+`MapRotationController` (novo) concentra a integração com o fork `leaflet-rotate-map`. Responsabilidades:
 
-- importar o plugin (dynamic import, `ssr: false`);
-- habilitar `dragRotate` e `touchRotate` quando `enabled === true`;
-- bindar handlers de `rotatestart`/`rotate`/`rotateend`;
-- atualizar `interactionStateRef.current.isRotating` no start/end;
-- reportar bearing normalizado (0–360) via `onBearingChange`;
+- instalar os handlers customizados de gesture (Ctrl+drag no desktop, 2 dedos no touch) quando `enabled === true`;
+- marcar `interactionStateRef.current.isRotating` durante o gesture para o `MapController` não cancelar follow;
+- escutar o evento `rotate` do mapa (emitido pelo fork em toda mudança de bearing) e reportar o valor normalizado (0–360) via `onBearingChange`;
 - observar `resetRotationTrigger` e chamar `setBearing(0)` quando muda;
-- limpar tudo (handlers, disable, ref, bearing) no unmount.
+- limpar listeners, estado e bearing no unmount.
+
+### Implementação dos Gestos
+
+O fork `leaflet-rotate-map` entrega apenas a matemática/renderização (pane rotacionado, `setBearing`, `getBearing`, evento `rotate`). Os gestos de entrada são implementados no controlador:
+
+- **Ctrl + drag (desktop):** listener em `mousedown` no container do mapa, em fase de captura. Se `event.ctrlKey && event.button === 0`, o listener chama `stopPropagation` para impedir Leaflet de iniciar pan, marca `isRotating = true`, guarda o ângulo inicial entre o ponteiro e o centro do container, e escuta `mousemove`/`mouseup` no `document`. Em `mousemove`, calcula o delta angular e chama `map.setBearing(map.getBearing() + delta)`. Em `mouseup`, desmarca `isRotating` e remove os listeners do documento.
+- **Dois dedos (touch):** listener em `touchstart` no container. Quando `event.touches.length === 2`, chama `stopPropagation`, marca `isRotating = true`, guarda o ângulo entre os dois pontos. Em `touchmove` com 2 toques, calcula o delta angular e aplica `setBearing`. Em `touchend`/`touchcancel` quando cair abaixo de 2 toques, desmarca `isRotating`.
+
+Ambos expõem funções puras para cálculo angular (`angleBetweenPoints`, `angleDelta`) para facilitar cobertura unitária.
 
 ### Feature Flag
 
@@ -157,10 +165,10 @@ const rotationInteractionRef = useRef({ isRotating: false })
 
 Sequência do gesto (desktop Ctrl+drag ou touch 2 dedos):
 
-1. Plugin dispara `rotatestart` → `isRotating = true`.
-2. Plugin dispara `rotate` várias vezes → `onBearingChange(normalize(bearing))`.
-3. Se Leaflet emitir `dragstart` nesse período, `MapController` vê `isRotating === true` e **não** cancela follow.
-4. Plugin dispara `rotateend` → `isRotating = false`, último `onBearingChange` com bearing final.
+1. Listener de gesture detecta `mousedown`/`touchstart` com Ctrl ou 2 dedos → marca `isRotating = true`, chama `stopPropagation` para Leaflet não disparar pan.
+2. Cada `mousemove`/`touchmove` calcula delta angular e chama `map.setBearing(current + delta)`. O fork emite `rotate`; o listener do controlador captura o bearing e chama `onBearingChange(normalize(bearing))`.
+3. Se por qualquer motivo Leaflet emitir `dragstart` nesse período, `MapController` vê `isRotating === true` e **não** cancela follow.
+4. `mouseup` / queda abaixo de 2 toques → marca `isRotating = false`, último `onBearingChange` com o bearing final.
 
 Estado novo em `DashboardMap`:
 
@@ -177,10 +185,10 @@ Estado que permanece igual:
 ### Modificados
 
 - `web/src/app/(dashboard)/dashboard-map.tsx` — flag, bearing state, trigger, botão "Norte" condicional.
-- `web/src/components/map/tracking-map.tsx` — aceita novas props, cria ref compartilhado, monta `MapRotationController`.
+- `web/src/components/map/tracking-map.tsx` — aceita novas props, cria ref compartilhado, monta `MapRotationController`, passa `rotate={rotationEnabled}` para `MapContainer`.
 - `web/src/components/map/map-controller.tsx` — aceita `interactionStateRef`, exporta `shouldCancelFollowOnMapDrag`, preserva bearing em fit all.
 - `web/.env.local.example` — documenta a flag off por padrão.
-- `web/package.json` / `web/package-lock.json` — dependência do plugin.
+- `web/package.json` / `web/package-lock.json` — substitui `leaflet` pelo alias npm `leaflet-rotate-map`.
 - Testes correspondentes (`dashboard-map.test.tsx`, `map-controller.test.ts`).
 
 ### Novos
@@ -192,19 +200,15 @@ Estado que permanece igual:
 
 ### Flag desligada
 
-Controlador monta, vê `enabled === false`, garante `isRotating = false` e `onBearingChange(0)`, retorna cedo. Plugin nunca carrega, botão "Norte" nunca renderiza (por conta do `showResetRotation = flag && ...`).
+Com `rotationEnabled === false`, o mapa é criado **sem** `rotate: true`, então o fork se comporta exatamente como o Leaflet normal (zero overhead de rotação). O `MapRotationController` vê `enabled === false`, garante `isRotating = false` e `onBearingChange(0)`, não registra nenhum listener.
 
-### Plugin indisponível ou incompatível
+### Capacidade de rotação ausente
 
-`supportsMapRotation(map)` verifica presença de `dragRotate`, `touchRotate`, `getBearing` e `setBearing` antes de registrar handlers. Se ausentes, controlador cai em fallback silencioso — mapa funciona 100% em north-up.
-
-### Gesture sem eventos
-
-Se `rotatestart`/`rotateend` não disparam, `isRotating` fica sempre `false` e o comportamento degrada para o atual. Nada quebra; feature fica inerte até a flag ser desligada.
+`supportsMapRotation(map)` verifica presença de `getBearing` e `setBearing` no mapa antes de registrar listeners. Se ausentes (por exemplo, `leaflet-rotate-map` falhou ao carregar e o build caiu em `leaflet` puro), o controlador cai em fallback silencioso — mapa funciona 100% em north-up, botão "Norte" nunca aparece.
 
 ### Conflito com fit all
 
-Se `fitBounds`/`setView` do plugin não preservar bearing, `MapController` salva `getBearing()` antes da chamada e aplica `setBearing` depois. A validação ocorre na task de integração do plano.
+Como rede de proteção, `MapController` salva `getBearing()` antes de chamar `fitBounds` e reaplica o bearing depois. Mesmo que o fork já preserve, o código é idempotente e barato.
 
 ### SSR
 
@@ -212,7 +216,7 @@ Se `fitBounds`/`setView` do plugin não preservar bearing, `MapController` salva
 
 ### Licença e manutenção do plugin
 
-Antes de instalar, rodar `npm view leaflet-rotate name version license repository.url` e validar. Se a licença for incompatível com o projeto ou o pacote estiver claramente abandonado, **pausar a feature** e reavaliar em vez de recorrer a hack de CSS.
+Validação prévia já executada em 2026-04-18: `leaflet-rotate` é GPL-3.0 (rejeitado) e `leaflet-rotate-map@0.3.1` é BSD-2-Clause (aceito). O fork é instalado como alias no nome `leaflet` (`"leaflet": "npm:leaflet-rotate-map@0.3.1"`) para manter `react-leaflet` e os imports existentes intactos.
 
 ## Cobertura de Testes
 
@@ -221,8 +225,10 @@ Antes de instalar, rodar `npm view leaflet-rotate name version license repositor
 - `map-rotation-feature.test.ts`: parser truthy/falsey, case-insensitive, valor ausente.
 - `map-rotation-controller.test.ts` com stub de `map`:
   - `normalizeMapBearing` — `-90 → 270`, `360 → 0`, `450 → 90`.
-  - `supportsMapRotation` — detecta mapa sem primitivas do plugin.
-  - `bindRotationHandlers` — `rotatestart` liga `isRotating`, `rotate` chama `onBearingChange` com valor normalizado, `rotateend` desliga `isRotating`, cleanup remove handlers.
+  - `supportsMapRotation` — detecta mapa sem `getBearing`/`setBearing`.
+  - `angleBetweenPoints` / `angleDelta` — cálculo angular puro, incluindo wrap em ±180°.
+  - `attachCtrlDragRotation` com container e `map` stub — `mousedown` com Ctrl liga `isRotating` e chama `stopPropagation`; `mousemove` chama `setBearing` com delta correto; `mouseup` desliga `isRotating`; cleanup remove listeners.
+  - `attachTouchRotation` com container e `map` stub — `touchstart` com 2 toques liga `isRotating`; `touchmove` aplica delta; queda para <2 toques desliga.
 - `map-controller.test.ts` — `shouldCancelFollowOnMapDrag(false) === true`, `(true) === false`.
 - `dashboard-map.test.tsx`:
   - flag off: `rotation-enabled:no`, botão "Norte" nunca aparece;
