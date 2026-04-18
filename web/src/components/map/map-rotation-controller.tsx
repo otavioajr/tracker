@@ -42,20 +42,6 @@ export function angleDelta(from: number, to: number) {
   return delta;
 }
 
-function containerCenter(container: HTMLElement) {
-  const rect = container.getBoundingClientRect();
-  return { x: rect.width / 2, y: rect.height / 2 };
-}
-
-function pointerToContainer(
-  container: HTMLElement,
-  clientX: number,
-  clientY: number
-) {
-  const rect = container.getBoundingClientRect();
-  return { x: clientX - rect.left, y: clientY - rect.top };
-}
-
 type GestureBindingArgs = {
   map: RotatableMap;
   interactionStateRef: RotationInteractionRef;
