@@ -19,7 +19,8 @@
       }
     ],
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "leaflet": ["./node_modules/@types/leaflet"]
     }
   },
   "include": [
