@@ -1,6 +1,6 @@
 "use client";
 
-import "leaflet/dist/leaflet.css";
+import "leaflet/leaflet.css";
 import { useRef } from "react";
 import dynamic from "next/dynamic";
 import type { DashboardVehicleTrail, VehiclePosition } from "./types";

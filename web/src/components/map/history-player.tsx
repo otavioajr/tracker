@@ -1,6 +1,6 @@
 "use client";
 
-import "leaflet/dist/leaflet.css";
+import "leaflet/leaflet.css";
 import { useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import type { DivIcon } from "leaflet";
