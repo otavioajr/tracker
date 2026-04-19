@@ -97,7 +97,8 @@ Fora do escopo:
 
 - o botão continua ajustando centro e zoom com base nas posições;
 - o bearing atual é preservado (não reseta para norte automaticamente);
-- se `fitBounds`/`setView` do plugin não preservar bearing nativamente, salvar antes e restaurar depois dentro do `MapController`.
+- quando o mapa estiver rotacionado, o `MapController` expande os bounds do `fitBounds` com `pad(0.42)` antes do ajuste para cobrir o worst-case de `45deg` e evitar clipping nos cantos;
+- depois do `fitBounds`, o bearing anterior é restaurado explicitamente como rede de proteção.
 
 ### Reload
 
@@ -121,7 +122,7 @@ DashboardMap                         (dona da flag, bearing state, reset trigger
 
 `TrackingMap` segue responsável por montar `MapContainer`, layers, markers, trilhas. Passa a criar o `rotationInteractionRef` e a montar `MapRotationController` como irmão do `MapController`.
 
-`MapController` continua cuidando de follow, fit all e cancel por drag. Ganha uma prop `interactionStateRef` e consulta `isRotating` antes de cancelar follow no `dragstart`. Também preserva bearing em `fitBounds` via salva-restaura explícito como rede de proteção.
+`MapController` continua cuidando de follow, fit all e cancel por drag. Ganha uma prop `interactionStateRef` e consulta `isRotating` antes de cancelar follow no `dragstart`. No `fit all`, expande os bounds com `pad(0.42)` quando `bearing !== 0` e depois reaplica o bearing anterior como rede de proteção.
 
 `MapRotationController` (novo) concentra a integração com o fork `leaflet-rotate-map`. Responsabilidades:
 

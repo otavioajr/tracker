@@ -25,8 +25,20 @@ type MapControllerProps = {
 
 const FOLLOW_ZOOM = 16;
 const FITALL_PADDING: L.PointTuple = [50, 50];
+const ROTATED_FIT_BOUNDS_PAD_RATIO = 0.42;
 type MapPoint = [number, number];
 type MapBounds = [MapPoint, MapPoint];
+
+export function expandBoundsForRotation(
+  bounds: L.LatLngBounds,
+  bearingDeg: number
+) {
+  if (bearingDeg === 0) {
+    return bounds;
+  }
+
+  return bounds.pad(ROTATED_FIT_BOUNDS_PAD_RATIO);
+}
 
 export function MapController({
   followedDeviceId,
@@ -111,8 +123,12 @@ export function MapController({
         typeof rotatableMap.getBearing === "function"
           ? rotatableMap.getBearing()
           : 0;
+      const fitBounds = expandBoundsForRotation(
+        L.latLngBounds(action.bounds),
+        previousBearing
+      );
 
-      map.fitBounds(L.latLngBounds(action.bounds), {
+      map.fitBounds(fitBounds, {
         padding: FITALL_PADDING,
         animate: true,
       });

@@ -12,6 +12,7 @@
 
 - O gesto touch deixou de interceptar `touchstart` imediatamente. A decisão entre pinch e rotação agora acontece no primeiro `touchmove` com 2 toques.
 - A heurística final ficou: rotação só entra quando `|Δθ| >= 8deg` e a variação angular domina a variação relativa de distância por um fator de `1.2`; se a distância passar de `15%` primeiro, o gesto fica travado como pinch até terminar.
+- O `fit all` do dashboard passa a expandir `LatLngBounds` com `pad(0.42)` sempre que o mapa estiver com bearing diferente de zero, preservando o bearing depois do `fitBounds`.
 
 ---
 
