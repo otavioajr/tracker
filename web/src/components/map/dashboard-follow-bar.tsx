@@ -22,7 +22,7 @@ export function DashboardFollowBar({
   const statusMeta = DASHBOARD_STATUS_META[status];
 
   return (
-    <div className="pointer-events-auto flex min-w-[18rem] max-w-[calc(100vw-2rem)] items-center gap-3 rounded-2xl border border-white/10 bg-background/88 px-3 py-3 text-foreground shadow-[0_20px_40px_-24px_rgba(0,0,0,0.7)] backdrop-blur-xl">
+    <div className="pointer-events-auto flex w-full items-center gap-3 rounded-2xl border border-white/10 bg-background/88 px-3 py-3 text-foreground shadow-[0_20px_40px_-24px_rgba(0,0,0,0.7)] backdrop-blur-xl lg:w-auto lg:min-w-[18rem] lg:max-w-[calc(100vw-2rem)]">
       <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/12 text-primary ring-1 ring-primary/20">
         <LocateFixed className="size-4" />
       </div>

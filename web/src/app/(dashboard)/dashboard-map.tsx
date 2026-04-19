@@ -301,7 +301,7 @@ export function DashboardMap({ initialPositions, userId }: DashboardMapProps) {
       />
 
       {followedVehicle ? (
-        <div className="absolute top-3 left-1/2 z-[1000] -translate-x-1/2">
+        <div className="absolute top-16 left-1/2 z-[1000] -translate-x-1/2 px-3 w-full max-w-[26rem] lg:top-3 lg:w-auto lg:px-0">
           <DashboardFollowBar
             vehicle={followedVehicle}
             status={getVehicleOperationalStatus(followedVehicle)}
