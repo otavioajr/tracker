@@ -284,7 +284,7 @@ export function DashboardMap({ initialPositions, userId }: DashboardMapProps) {
   }));
 
   return (
-    <div className="relative h-full w-full overflow-hidden rounded-[28px] border border-white/8 bg-black/10 ring-1 ring-white/6">
+    <div className="group relative h-full w-full overflow-hidden rounded-[28px] border border-white/8 bg-black/10 ring-1 ring-white/6">
       <TrackingMap
         positions={positions}
         trails={trails}
@@ -301,7 +301,7 @@ export function DashboardMap({ initialPositions, userId }: DashboardMapProps) {
       />
 
       {followedVehicle ? (
-        <div className="absolute top-3 left-14 right-14 z-[1000] flex justify-center lg:left-1/2 lg:right-auto lg:-translate-x-1/2">
+        <div className="absolute top-3 left-14 right-14 z-[1000] flex justify-center transition-[right,transform] duration-200 group-has-[.leaflet-control-layers-expanded]:right-40 lg:left-1/2 lg:right-auto lg:-translate-x-1/2 lg:group-has-[.leaflet-control-layers-expanded]:-translate-x-[calc(50%+80px)]">
           <DashboardFollowBar
             vehicle={followedVehicle}
             status={getVehicleOperationalStatus(followedVehicle)}
