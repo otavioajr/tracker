@@ -8,6 +8,11 @@
 
 **Tech Stack:** Next.js App Router 16, React 19, Leaflet 1.9 (via fork), react-leaflet 5, Vitest + Testing Library, npm.
 
+## Update 2026-04-19
+
+- O gesto touch deixou de interceptar `touchstart` imediatamente. A decisão entre pinch e rotação agora acontece no primeiro `touchmove` com 2 toques.
+- A heurística final ficou: rotação só entra quando `|Δθ| >= 8deg` e a variação angular domina a variação relativa de distância por um fator de `1.2`; se a distância passar de `15%` primeiro, o gesto fica travado como pinch até terminar.
+
 ---
 
 ## File Structure

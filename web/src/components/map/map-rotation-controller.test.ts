@@ -30,6 +30,24 @@ function createMapStub() {
   return { map, container };
 }
 
+function dispatchTouchEvent(
+  container: HTMLElement,
+  type: string,
+  touches: Array<{ clientX: number; clientY: number }>
+) {
+  const event = new Event(type, { bubbles: true, cancelable: true });
+  const stopPropagation = vi.fn();
+  const preventDefault = vi.fn();
+
+  Object.defineProperty(event, "touches", { value: touches });
+  Object.defineProperty(event, "stopPropagation", { value: stopPropagation });
+  Object.defineProperty(event, "preventDefault", { value: preventDefault });
+
+  container.dispatchEvent(event);
+
+  return { event, stopPropagation, preventDefault };
+}
+
 describe("map-rotation-controller helpers", () => {
   it("normalizes bearings to the 0-360 range", () => {
     expect(normalizeMapBearing(-90)).toBe(270);
@@ -162,25 +180,112 @@ describe("map-rotation-controller helpers", () => {
       onBearingChange,
     });
 
-    function fireTouch(type: string, touches: Array<{ clientX: number; clientY: number }>) {
-      const event = new Event(type, { bubbles: true, cancelable: true });
-      Object.defineProperty(event, "touches", { value: touches });
-      container.dispatchEvent(event);
-    }
-
-    fireTouch("touchstart", [
+    dispatchTouchEvent(container, "touchstart", [
       { clientX: 50, clientY: 100 },
       { clientX: 150, clientY: 100 },
     ]);
-    expect(interactionStateRef.current.isRotating).toBe(true);
+    expect(interactionStateRef.current.isRotating).toBe(false);
 
-    fireTouch("touchmove", [
-      { clientX: 100, clientY: 50 },
-      { clientX: 100, clientY: 150 },
+    const move = dispatchTouchEvent(container, "touchmove", [
+      { clientX: 51.7, clientY: 87.06 },
+      { clientX: 148.3, clientY: 112.94 },
     ]);
     expect(map.setBearing).toHaveBeenCalled();
+    expect(move.stopPropagation).toHaveBeenCalled();
+    expect(interactionStateRef.current.isRotating).toBe(true);
 
-    fireTouch("touchend", [{ clientX: 100, clientY: 50 }]);
+    dispatchTouchEvent(container, "touchend", [{ clientX: 100, clientY: 50 }]);
+    expect(interactionStateRef.current.isRotating).toBe(false);
+
+    cleanup();
+    container.remove();
+  });
+
+  it("deixa pinch zoom passar quando so a distancia muda", () => {
+    const { map, container } = createMapStub();
+    const interactionStateRef = { current: { isRotating: false } };
+    const onBearingChange = vi.fn();
+
+    const cleanup = attachTouchRotation({
+      map,
+      interactionStateRef,
+      onBearingChange,
+    });
+
+    dispatchTouchEvent(container, "touchstart", [
+      { clientX: 50, clientY: 100 },
+      { clientX: 150, clientY: 100 },
+    ]);
+
+    const move = dispatchTouchEvent(container, "touchmove", [
+      { clientX: 0, clientY: 100 },
+      { clientX: 200, clientY: 100 },
+    ]);
+
+    expect(map.setBearing).not.toHaveBeenCalled();
+    expect(interactionStateRef.current.isRotating).toBe(false);
+    expect(move.stopPropagation).not.toHaveBeenCalled();
+
+    cleanup();
+    container.remove();
+  });
+
+  it("entra em rotacao quando o angulo muda antes da distancia", () => {
+    const { map, container } = createMapStub();
+    const interactionStateRef = { current: { isRotating: false } };
+    const onBearingChange = vi.fn();
+
+    const cleanup = attachTouchRotation({
+      map,
+      interactionStateRef,
+      onBearingChange,
+    });
+
+    dispatchTouchEvent(container, "touchstart", [
+      { clientX: 50, clientY: 100 },
+      { clientX: 150, clientY: 100 },
+    ]);
+
+    const move = dispatchTouchEvent(container, "touchmove", [
+      { clientX: 51.7, clientY: 87.06 },
+      { clientX: 148.3, clientY: 112.94 },
+    ]);
+
+    expect(map.setBearing).toHaveBeenCalled();
+    expect(interactionStateRef.current.isRotating).toBe(true);
+    expect(move.stopPropagation).toHaveBeenCalled();
+
+    cleanup();
+    container.remove();
+  });
+
+  it("pinch-e-depois-gira continua sendo pinch", () => {
+    const { map, container } = createMapStub();
+    const interactionStateRef = { current: { isRotating: false } };
+    const onBearingChange = vi.fn();
+
+    const cleanup = attachTouchRotation({
+      map,
+      interactionStateRef,
+      onBearingChange,
+    });
+
+    dispatchTouchEvent(container, "touchstart", [
+      { clientX: 50, clientY: 100 },
+      { clientX: 150, clientY: 100 },
+    ]);
+
+    dispatchTouchEvent(container, "touchmove", [
+      { clientX: 40, clientY: 100 },
+      { clientX: 160, clientY: 103 },
+    ]);
+
+    dispatchTouchEvent(container, "touchmove", [
+      { clientX: 70, clientY: 60 },
+      { clientX: 130, clientY: 140 },
+    ]);
+
+    expect(map.setBearing).not.toHaveBeenCalled();
     expect(interactionStateRef.current.isRotating).toBe(false);
 
     cleanup();

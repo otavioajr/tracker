@@ -136,7 +136,7 @@ DashboardMap                         (dona da flag, bearing state, reset trigger
 O fork `leaflet-rotate-map` entrega apenas a matemática/renderização (pane rotacionado, `setBearing`, `getBearing`, evento `rotate`). Os gestos de entrada são implementados no controlador:
 
 - **Ctrl + drag (desktop):** listener em `mousedown` no container do mapa, em fase de captura. Se `event.ctrlKey && event.button === 0`, o listener chama `stopPropagation` para impedir Leaflet de iniciar pan, marca `isRotating = true`, guarda o ângulo inicial entre o ponteiro e o centro do container, e escuta `mousemove`/`mouseup` no `document`. Em `mousemove`, calcula o delta angular e chama `map.setBearing(map.getBearing() + delta)`. Em `mouseup`, desmarca `isRotating` e remove os listeners do documento.
-- **Dois dedos (touch):** listener em `touchstart` no container. Quando `event.touches.length === 2`, chama `stopPropagation`, marca `isRotating = true`, guarda o ângulo entre os dois pontos. Em `touchmove` com 2 toques, calcula o delta angular e aplica `setBearing`. Em `touchend`/`touchcancel` quando cair abaixo de 2 toques, desmarca `isRotating`.
+- **Dois dedos (touch):** listener em `touchstart` no container apenas guarda baseline (ângulo e distância entre os dois toques) e não intercepta o evento. A decisão acontece no primeiro `touchmove` com dois toques: se a variação angular atingir pelo menos `8deg` e dominar proporcionalmente a variação de distância, o gesto entra em rotação, passa a marcar `isRotating = true` e só então chama `stopPropagation` / `preventDefault` antes de aplicar `setBearing`. Se a distância dominar primeiro (pinch), o controlador nunca intercepta e o Leaflet continua responsável pelo zoom.
 
 Ambos expõem funções puras para cálculo angular (`angleBetweenPoints`, `angleDelta`) para facilitar cobertura unitária.
 
@@ -165,10 +165,12 @@ const rotationInteractionRef = useRef({ isRotating: false })
 
 Sequência do gesto (desktop Ctrl+drag ou touch 2 dedos):
 
-1. Listener de gesture detecta `mousedown`/`touchstart` com Ctrl ou 2 dedos → marca `isRotating = true`, chama `stopPropagation` para Leaflet não disparar pan.
-2. Cada `mousemove`/`touchmove` calcula delta angular e chama `map.setBearing(current + delta)`. O fork emite `rotate`; o listener do controlador captura o bearing e chama `onBearingChange(normalize(bearing))`.
-3. Se por qualquer motivo Leaflet emitir `dragstart` nesse período, `MapController` vê `isRotating === true` e **não** cancela follow.
-4. `mouseup` / queda abaixo de 2 toques → marca `isRotating = false`, último `onBearingChange` com o bearing final.
+1. Listener de gesture detecta `mousedown` com Ctrl ou `touchstart` com 2 dedos.
+2. No desktop, o gesto já entra direto em rotação e chama `stopPropagation` para o Leaflet não iniciar pan.
+3. No touch, o controlador fica em estado "undecided" até o primeiro `touchmove`: se o ângulo dominar, entra em rotação e só a partir daí intercepta o evento; se a distância dominar primeiro, fixa o gesto como pinch e deixa o Leaflet cuidar do zoom.
+4. Cada `mousemove`/`touchmove` já classificado como rotação calcula delta angular e chama `map.setBearing(current + delta)`. O fork emite `rotate`; o listener do controlador captura o bearing e chama `onBearingChange(normalize(bearing))`.
+5. Se por qualquer motivo Leaflet emitir `dragstart` nesse período, `MapController` vê `isRotating === true` e **não** cancela follow.
+6. `mouseup` / queda abaixo de 2 toques → marca `isRotating = false`; no touch, o `onBearingChange` final só roda se o gesto realmente virou rotação.
 
 Estado novo em `DashboardMap`:
 
@@ -228,7 +230,7 @@ Validação prévia já executada em 2026-04-18: `leaflet-rotate` é GPL-3.0 (re
   - `supportsMapRotation` — detecta mapa sem `getBearing`/`setBearing`.
   - `angleBetweenPoints` / `angleDelta` — cálculo angular puro, incluindo wrap em ±180°.
   - `attachCtrlDragRotation` com container e `map` stub — `mousedown` com Ctrl liga `isRotating` e chama `stopPropagation`; `mousemove` chama `setBearing` com delta correto; `mouseup` desliga `isRotating`; cleanup remove listeners.
-  - `attachTouchRotation` com container e `map` stub — `touchstart` com 2 toques liga `isRotating`; `touchmove` aplica delta; queda para <2 toques desliga.
+  - `attachTouchRotation` com container e `map` stub — pinch puro não intercepta `touchmove`; rotação só começa quando a variação angular domina a distância; gesto que vira pinch cedo continua pinch até o fim; queda para <2 toques só publica bearing final se houve rotação.
 - `map-controller.test.ts` — `shouldCancelFollowOnMapDrag(false) === true`, `(true) === false`.
 - `dashboard-map.test.tsx`:
   - flag off: `rotation-enabled:no`, botão "Norte" nunca aparece;
