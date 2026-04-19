@@ -50,6 +50,7 @@ describe("dashboard-map-preferences", () => {
       statusFilter: "moving",
       desktopRailOpen: true,
       activeTrailDeviceIds: ["device-1", "device-2"],
+      baseLayer: "Ruas",
     });
   });
 

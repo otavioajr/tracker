@@ -4,6 +4,10 @@ import "leaflet/leaflet.css";
 import { useRef } from "react";
 import dynamic from "next/dynamic";
 import type { DashboardVehicleTrail, VehiclePosition } from "./types";
+import {
+  DEFAULT_MAP_BASE_LAYER,
+  type MapBaseLayer,
+} from "@/lib/map/map-base-layer";
 
 const SAO_PAULO: [number, number] = [-23.55, -46.63];
 
@@ -51,6 +55,11 @@ const VehicleTrailLayerDynamic = dynamic(
   { ssr: false }
 );
 
+const BaseLayerListenerDynamic = dynamic(
+  () => import("./base-layer-listener").then((m) => m.BaseLayerListener),
+  { ssr: false }
+);
+
 export type TrackingMapProps = {
   positions: VehiclePosition[];
   trails: DashboardVehicleTrail[];
@@ -64,6 +73,8 @@ export type TrackingMapProps = {
   rotationEnabled: boolean;
   onBearingChange: (bearing: number) => void;
   resetRotationTrigger: number;
+  initialBaseLayer?: MapBaseLayer;
+  onBaseLayerChange?: (baseLayer: MapBaseLayer) => void;
 };
 
 export function TrackingMap({
@@ -79,7 +90,16 @@ export function TrackingMap({
   rotationEnabled,
   onBearingChange,
   resetRotationTrigger,
+  initialBaseLayer = DEFAULT_MAP_BASE_LAYER,
+  onBaseLayerChange,
 }: TrackingMapProps) {
+  const activeBaseLayer: MapBaseLayer = initialBaseLayer;
+  const handleBaseLayerChange = (name: string) => {
+    if (!onBaseLayerChange) return;
+    if (name === "Ruas" || name === "Detalhado" || name === "Satelite" || name === "Escuro") {
+      onBaseLayerChange(name);
+    }
+  };
   const center: [number, number] =
     positions.length > 0
       ? [positions[0].latitude, positions[0].longitude]
@@ -96,31 +116,32 @@ export function TrackingMap({
       {...({ rotate: rotationEnabled } as Record<string, unknown>)}
     >
       <LayersControl position="topright">
-        <LayersControlBaseLayer checked name="Ruas">
+        <LayersControlBaseLayer checked={activeBaseLayer === "Ruas"} name="Ruas">
           <TileLayer
             attribution='&copy; <a href="https://carto.com/">CARTO</a>'
             url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
           />
         </LayersControlBaseLayer>
-        <LayersControlBaseLayer name="Detalhado">
+        <LayersControlBaseLayer checked={activeBaseLayer === "Detalhado"} name="Detalhado">
           <TileLayer
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
         </LayersControlBaseLayer>
-        <LayersControlBaseLayer name="Satelite">
+        <LayersControlBaseLayer checked={activeBaseLayer === "Satelite"} name="Satelite">
           <TileLayer
             attribution='&copy; Esri'
             url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
           />
         </LayersControlBaseLayer>
-        <LayersControlBaseLayer name="Escuro">
+        <LayersControlBaseLayer checked={activeBaseLayer === "Escuro"} name="Escuro">
           <TileLayer
             attribution='&copy; <a href="https://carto.com/">CARTO</a>'
             url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
           />
         </LayersControlBaseLayer>
       </LayersControl>
+      <BaseLayerListenerDynamic onChange={handleBaseLayerChange} />
       <MapControllerDynamic
         followedDeviceId={followedDeviceId}
         positions={positions}

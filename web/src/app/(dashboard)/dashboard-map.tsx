@@ -28,6 +28,10 @@ import {
   writeDashboardMapUiPreferences,
 } from "@/lib/map/dashboard-map-preferences";
 import {
+  DEFAULT_MAP_BASE_LAYER,
+  type MapBaseLayer,
+} from "@/lib/map/map-base-layer";
+import {
   type DashboardVehicleFilter,
   filterDashboardVehicles,
   formatLastSignalRelative,
@@ -135,6 +139,9 @@ export function DashboardMap({ initialPositions, userId }: DashboardMapProps) {
   const [statusFilter, setStatusFilter] =
     useState<DashboardVehicleFilter>("all");
   const [desktopRailOpen, setDesktopRailOpen] = useState(true);
+  const [baseLayer, setBaseLayer] = useState<MapBaseLayer>(
+    DEFAULT_MAP_BASE_LAYER
+  );
   const [mobileSheetState, setMobileSheetState] =
     useState<DashboardMobileSheetState>("collapsed");
   const [hydratedPreferencesUserId, setHydratedPreferencesUserId] =
@@ -171,6 +178,7 @@ export function DashboardMap({ initialPositions, userId }: DashboardMapProps) {
     setSearchQuery(preferences.searchQuery);
     setStatusFilter(preferences.statusFilter);
     setDesktopRailOpen(preferences.desktopRailOpen);
+    setBaseLayer(preferences.baseLayer);
     setMobileSheetState("collapsed");
     dispatchTrailState({
       type: "hydrate",
@@ -233,6 +241,7 @@ export function DashboardMap({ initialPositions, userId }: DashboardMapProps) {
       statusFilter,
       desktopRailOpen,
       activeTrailDeviceIds: Array.from(trailState.activeTrailDeviceIds),
+      baseLayer,
     });
   }, [
     userId,
@@ -241,6 +250,7 @@ export function DashboardMap({ initialPositions, userId }: DashboardMapProps) {
     statusFilter,
     desktopRailOpen,
     trailState.activeTrailDeviceIds,
+    baseLayer,
   ]);
 
   const filteredPositions = filterDashboardVehicles(positions, {
@@ -283,22 +293,32 @@ export function DashboardMap({ initialPositions, userId }: DashboardMapProps) {
     points: trailState.trails[deviceId] ?? [],
   }));
 
+  const preferencesReady = !userId || hydratedPreferencesUserId === userId;
+
   return (
     <div className="group relative h-full w-full overflow-hidden rounded-[28px] border border-white/8 bg-black/10 ring-1 ring-white/6">
-      <TrackingMap
-        positions={positions}
-        trails={trails}
-        className="h-full w-full"
-        selectedDeviceId={selectedDeviceId}
-        followedDeviceId={followedDeviceId}
-        onSelect={handleSelectVehicle}
-        onFollow={handleSelectVehicle}
-        onCancelFollow={handleCancelFollow}
-        fitAllTrigger={fitAllTrigger}
-        rotationEnabled={rotationEnabled}
-        onBearingChange={setMapBearing}
-        resetRotationTrigger={resetRotationTrigger}
-      />
+      {preferencesReady ? (
+        <TrackingMap
+          positions={positions}
+          trails={trails}
+          className="h-full w-full"
+          selectedDeviceId={selectedDeviceId}
+          followedDeviceId={followedDeviceId}
+          onSelect={handleSelectVehicle}
+          onFollow={handleSelectVehicle}
+          onCancelFollow={handleCancelFollow}
+          fitAllTrigger={fitAllTrigger}
+          rotationEnabled={rotationEnabled}
+          onBearingChange={setMapBearing}
+          resetRotationTrigger={resetRotationTrigger}
+          initialBaseLayer={baseLayer}
+          onBaseLayerChange={setBaseLayer}
+        />
+      ) : (
+        <div className="flex h-full w-full items-center justify-center rounded-lg bg-card text-sm text-muted-foreground">
+          Carregando mapa...
+        </div>
+      )}
 
       {followedVehicle ? (
         <div className="absolute top-3 left-14 right-14 z-[1000] flex justify-center transition-[right,transform] duration-200 group-has-[.leaflet-control-layers-expanded]:right-40 lg:left-1/2 lg:right-auto lg:-translate-x-1/2 lg:group-has-[.leaflet-control-layers-expanded]:-translate-x-[calc(50%+80px)]">

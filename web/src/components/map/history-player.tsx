@@ -11,6 +11,14 @@ import { HistorySelectedPointCard } from "@/components/map/history-selected-poin
 import { getVehicles } from "@/lib/actions/vehicles";
 import { getPositionHistory, VehiclePosition } from "@/lib/actions/positions";
 import {
+  DEFAULT_MAP_BASE_LAYER,
+  type MapBaseLayer,
+} from "@/lib/map/map-base-layer";
+import {
+  readHistoryMapUiPreferences,
+  writeHistoryMapUiPreferences,
+} from "@/lib/map/history-map-preferences";
+import {
   buildHistoryHighlights,
   buildPlaybackTrailCoords,
   buildRouteCoords,
@@ -98,6 +106,11 @@ const HistoryMapControllerDynamic = dynamic(
   { ssr: false }
 );
 
+const BaseLayerListenerDynamic = dynamic(
+  () => import("./base-layer-listener").then((m) => m.BaseLayerListener),
+  { ssr: false }
+);
+
 type Vehicle = {
   id: string;
   plate: string;
@@ -126,6 +139,10 @@ export function HistoryPlayer() {
   const [hasSearched, setHasSearched] = useState(false);
   const [playbackSpeed, setPlaybackSpeed] = useState<PlaybackSpeedPreset>("1x");
   const [fitVersion, setFitVersion] = useState(0);
+  const [baseLayer, setBaseLayer] = useState<MapBaseLayer>(
+    DEFAULT_MAP_BASE_LAYER
+  );
+  const [baseLayerHydrated, setBaseLayerHydrated] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const routeData = useMemo(() => {
@@ -179,6 +196,23 @@ export function HistoryPlayer() {
     hasResults,
     error,
   });
+
+  useEffect(() => {
+    const preferences = readHistoryMapUiPreferences();
+    setBaseLayer(preferences.baseLayer);
+    setBaseLayerHydrated(true);
+  }, []);
+
+  useEffect(() => {
+    if (!baseLayerHydrated) return;
+    writeHistoryMapUiPreferences({ baseLayer });
+  }, [baseLayer, baseLayerHydrated]);
+
+  const handleBaseLayerChange = (name: string) => {
+    if (name === "Ruas" || name === "Detalhado" || name === "Satelite" || name === "Escuro") {
+      setBaseLayer(name);
+    }
+  };
 
   useEffect(() => {
     let isActive = true;
@@ -332,7 +366,7 @@ export function HistoryPlayer() {
             </div>
           ) : null}
 
-          {!mounted ? (
+          {!mounted || !baseLayerHydrated ? (
             <MapShellLoadingState label="Preparando mapa..." />
           ) : loading ? (
             <MapShellLoadingState label="Carregando rota..." />
@@ -364,31 +398,32 @@ export function HistoryPlayer() {
               style={{ width: "100%", height: "100%", minHeight: 420 }}
             >
               <LayersControl position="topright">
-                <LayersControlBaseLayer checked name="Ruas">
+                <LayersControlBaseLayer checked={baseLayer === "Ruas"} name="Ruas">
                   <TileLayer
                     attribution='&copy; <a href="https://carto.com/">CARTO</a>'
                     url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
                   />
                 </LayersControlBaseLayer>
-                <LayersControlBaseLayer name="Detalhado">
+                <LayersControlBaseLayer checked={baseLayer === "Detalhado"} name="Detalhado">
                   <TileLayer
                     attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
                     url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                   />
                 </LayersControlBaseLayer>
-                <LayersControlBaseLayer name="Satelite">
+                <LayersControlBaseLayer checked={baseLayer === "Satelite"} name="Satelite">
                   <TileLayer
                     attribution="&copy; Esri"
                     url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
                   />
                 </LayersControlBaseLayer>
-                <LayersControlBaseLayer name="Escuro">
+                <LayersControlBaseLayer checked={baseLayer === "Escuro"} name="Escuro">
                   <TileLayer
                     attribution='&copy; <a href="https://carto.com/">CARTO</a>'
                     url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
                   />
                 </LayersControlBaseLayer>
               </LayersControl>
+              <BaseLayerListenerDynamic onChange={handleBaseLayerChange} />
 
               <HistoryMapControllerDynamic
                 center={

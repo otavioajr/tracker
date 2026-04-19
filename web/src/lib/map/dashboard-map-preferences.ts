@@ -1,4 +1,9 @@
 import type { DashboardVehicleFilter } from "./dashboard-map-utils";
+import {
+  DEFAULT_MAP_BASE_LAYER,
+  type MapBaseLayer,
+  normalizeMapBaseLayer,
+} from "./map-base-layer";
 
 import {
   buildUiPreferencesStorageKey,
@@ -11,6 +16,7 @@ export type DashboardMapUiPreferences = {
   statusFilter: DashboardVehicleFilter;
   desktopRailOpen: boolean;
   activeTrailDeviceIds: string[];
+  baseLayer: MapBaseLayer;
 };
 
 const DASHBOARD_MAP_UI_PREFERENCES_SCOPE = "dashboard-map";
@@ -21,6 +27,7 @@ export const DASHBOARD_MAP_UI_PREFERENCES_DEFAULTS: DashboardMapUiPreferences = 
   statusFilter: "all",
   desktopRailOpen: true,
   activeTrailDeviceIds: [],
+  baseLayer: DEFAULT_MAP_BASE_LAYER,
 };
 
 function createDashboardMapUiPreferencesDefaults(): DashboardMapUiPreferences {
@@ -29,6 +36,7 @@ function createDashboardMapUiPreferencesDefaults(): DashboardMapUiPreferences {
     statusFilter: "all",
     desktopRailOpen: true,
     activeTrailDeviceIds: [],
+    baseLayer: DEFAULT_MAP_BASE_LAYER,
   };
 }
 
@@ -85,6 +93,7 @@ export function normalizeDashboardMapUiPreferences(
         ? nextValue.desktopRailOpen
         : true,
     activeTrailDeviceIds: normalizeTrailDeviceIds(nextValue.activeTrailDeviceIds),
+    baseLayer: normalizeMapBaseLayer(nextValue.baseLayer),
   };
 }
 
