@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowUpRight, LocateFixed } from "lucide-react";
+import { ArrowUpRight, LocateFixed, Power } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { DASHBOARD_STATUS_META, getVehicleDisplayLabel } from "@/lib/map/dashboard-map-utils";
@@ -45,10 +45,18 @@ export function DashboardFollowBar({
             {statusMeta.label}
           </span>
         </div>
-        <div className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
-          <ArrowUpRight className="size-3" />
-          <span className="font-mono tabular-nums text-foreground">
-            {vehicle.speed.toFixed(0)} km/h
+        <div className="mt-1 flex items-center gap-3 text-xs text-muted-foreground">
+          <span className="inline-flex items-center gap-1">
+            <ArrowUpRight className="size-3" />
+            <span className="font-mono tabular-nums text-foreground">
+              {vehicle.speed.toFixed(0)} km/h
+            </span>
+          </span>
+          <span className="inline-flex items-center gap-1">
+            <Power className={cn("size-3", vehicle.ignition ? "text-emerald-400" : "text-muted-foreground")} />
+            <span className={cn(vehicle.ignition ? "text-emerald-400" : "text-muted-foreground")}>
+              {vehicle.ignition ? "Ligada" : "Desligada"}
+            </span>
           </span>
         </div>
       </div>
