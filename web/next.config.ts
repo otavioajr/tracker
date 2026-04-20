@@ -9,6 +9,12 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: projectDir,
   },
+  allowedDevOrigins: ["*.devtunnels.ms", "*.github.dev"],
+  experimental: {
+    serverActions: {
+      allowedOrigins: ["*.devtunnels.ms", "*.github.dev", "localhost:3000"],
+    },
+  },
 };
 
 export default nextConfig;
