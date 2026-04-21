@@ -96,11 +96,15 @@ export async function updateGeofenceShape(
 }
 
 export async function deleteGeofence(id: string): Promise<{ ok: true } | { error: string }> {
-  const supabase = await createClient();
-  const { error } = await supabase.from("geofences").delete().eq("id", id);
-  if (error) return { error: error.message };
+  try {
+    const supabase = await createClient();
+    const { error } = await supabase.from("geofences").delete().eq("id", id);
+    if (error) return { error: error.message };
 
-  revalidatePath("/geofences");
-  revalidatePath("/");
-  return { ok: true };
+    revalidatePath("/geofences");
+    revalidatePath("/");
+    return { ok: true };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Erro desconhecido" };
+  }
 }
