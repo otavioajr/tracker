@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Plus } from "lucide-react";
 
-import { buttonVariants } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button-variants";
 import { getGeofences } from "@/lib/actions/geofences";
 import { GeofenceTable } from "@/components/geofences/geofence-table";
 
