@@ -51,6 +51,7 @@ describe("dashboard-map-preferences", () => {
       desktopRailOpen: true,
       activeTrailDeviceIds: ["device-1", "device-2"],
       baseLayer: "Ruas",
+      showGeofences: true,
     });
   });
 
@@ -76,5 +77,22 @@ describe("dashboard-map-preferences", () => {
     expect(readDashboardMapUiPreferences("user-321")).toEqual(
       DASHBOARD_MAP_UI_PREFERENCES_DEFAULTS
     );
+  });
+
+  describe("showGeofences preference", () => {
+    it("default true quando ausente", () => {
+      const result = normalizeDashboardMapUiPreferences({});
+      expect(result.showGeofences).toBe(true);
+    });
+
+    it("preserva false explícito", () => {
+      const result = normalizeDashboardMapUiPreferences({ showGeofences: false });
+      expect(result.showGeofences).toBe(false);
+    });
+
+    it("ignora valor não booleano", () => {
+      const result = normalizeDashboardMapUiPreferences({ showGeofences: "yes" });
+      expect(result.showGeofences).toBe(true);
+    });
   });
 });

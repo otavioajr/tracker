@@ -17,6 +17,7 @@ export type DashboardMapUiPreferences = {
   desktopRailOpen: boolean;
   activeTrailDeviceIds: string[];
   baseLayer: MapBaseLayer;
+  showGeofences: boolean;
 };
 
 const DASHBOARD_MAP_UI_PREFERENCES_SCOPE = "dashboard-map";
@@ -28,6 +29,7 @@ export const DASHBOARD_MAP_UI_PREFERENCES_DEFAULTS: DashboardMapUiPreferences = 
   desktopRailOpen: true,
   activeTrailDeviceIds: [],
   baseLayer: DEFAULT_MAP_BASE_LAYER,
+  showGeofences: true,
 };
 
 function createDashboardMapUiPreferencesDefaults(): DashboardMapUiPreferences {
@@ -37,6 +39,7 @@ function createDashboardMapUiPreferencesDefaults(): DashboardMapUiPreferences {
     desktopRailOpen: true,
     activeTrailDeviceIds: [],
     baseLayer: DEFAULT_MAP_BASE_LAYER,
+    showGeofences: true,
   };
 }
 
@@ -94,6 +97,8 @@ export function normalizeDashboardMapUiPreferences(
         : true,
     activeTrailDeviceIds: normalizeTrailDeviceIds(nextValue.activeTrailDeviceIds),
     baseLayer: normalizeMapBaseLayer(nextValue.baseLayer),
+    showGeofences:
+      typeof nextValue.showGeofences === "boolean" ? nextValue.showGeofences : true,
   };
 }
 
