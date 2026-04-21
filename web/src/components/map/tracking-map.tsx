@@ -8,6 +8,7 @@ import {
   DEFAULT_MAP_BASE_LAYER,
   type MapBaseLayer,
 } from "@/lib/map/map-base-layer";
+import type { GeofenceRow } from "@/lib/geofences/types";
 
 const SAO_PAULO: [number, number] = [-23.55, -46.63];
 
@@ -60,6 +61,24 @@ const BaseLayerListenerDynamic = dynamic(
   { ssr: false }
 );
 
+const LayersControlOverlay = dynamic(
+  () => import("react-leaflet").then((m) => {
+    const LC = m.LayersControl;
+    return { default: LC.Overlay };
+  }),
+  { ssr: false }
+);
+
+const GeofenceLayerDynamic = dynamic(
+  () => import("@/components/geofences/geofence-layer").then((m) => m.GeofenceLayer),
+  { ssr: false }
+);
+
+const OverlayListenerDynamic = dynamic(
+  () => import("./overlay-listener").then((m) => m.OverlayListener),
+  { ssr: false }
+);
+
 export type TrackingMapProps = {
   positions: VehiclePosition[];
   trails: DashboardVehicleTrail[];
@@ -75,6 +94,9 @@ export type TrackingMapProps = {
   resetRotationTrigger: number;
   initialBaseLayer?: MapBaseLayer;
   onBaseLayerChange?: (baseLayer: MapBaseLayer) => void;
+  geofences: GeofenceRow[];
+  showGeofences: boolean;
+  onShowGeofencesChange: (visible: boolean) => void;
 };
 
 export function TrackingMap({
@@ -92,6 +114,9 @@ export function TrackingMap({
   resetRotationTrigger,
   initialBaseLayer = DEFAULT_MAP_BASE_LAYER,
   onBaseLayerChange,
+  geofences,
+  showGeofences,
+  onShowGeofencesChange,
 }: TrackingMapProps) {
   const activeBaseLayer: MapBaseLayer = initialBaseLayer;
   const handleBaseLayerChange = (name: string) => {
@@ -140,8 +165,12 @@ export function TrackingMap({
             url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
           />
         </LayersControlBaseLayer>
+        <LayersControlOverlay checked={showGeofences} name="Geocercas">
+          <GeofenceLayerDynamic geofences={geofences} />
+        </LayersControlOverlay>
       </LayersControl>
       <BaseLayerListenerDynamic onChange={handleBaseLayerChange} />
+      <OverlayListenerDynamic overlayName="Geocercas" onChange={onShowGeofencesChange} />
       <MapControllerDynamic
         followedDeviceId={followedDeviceId}
         positions={positions}
