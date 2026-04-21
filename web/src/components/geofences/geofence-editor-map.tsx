@@ -64,7 +64,16 @@ function GeomanController({
   const map = useMap();
 
   useEffect(() => {
-    const pm = (map as L.Map & { pm: any }).pm;
+    type PmMap = {
+      setLang: (lang: string) => void;
+      addControls: (opts: Record<string, unknown>) => void;
+      removeControls: () => void;
+    };
+    type PmLayer = { enable: (opts?: Record<string, unknown>) => void };
+    type PmCreateEvent = { layer: L.Layer; shape: string };
+    type PmEditEvent = { layer?: L.Layer; target?: L.Layer };
+
+    const pm = (map as L.Map & { pm?: PmMap }).pm;
     if (!pm) return;
 
     pm.setLang("pt_br" as never);
@@ -133,30 +142,31 @@ function GeomanController({
         layer = L.polygon(latlngs).addTo(map);
       }
       drawnLayerRef.current = layer;
-      (layer as L.Layer & { pm: any }).pm.enable({ allowSelfIntersection: false });
+      (layer as L.Layer & { pm: PmLayer }).pm.enable({ allowSelfIntersection: false });
 
       map.fitBounds((layer as L.Polygon | L.Circle).getBounds(), { padding: [40, 40] });
 
       pushShape(layer, initialShape.shape_type);
     }
 
-    const onCreate = (e: any) => {
+    const onCreate = (e: PmCreateEvent) => {
       if (drawnLayerRef.current) {
         map.removeLayer(drawnLayerRef.current);
       }
-      drawnLayerRef.current = e.layer as L.Layer;
+      drawnLayerRef.current = e.layer;
       const shapeType: GeofenceShape =
         e.shape === "Circle" ? "circle" : e.shape === "Rectangle" ? "rectangle" : "polygon";
       pushShape(e.layer, shapeType);
     };
 
-    const onEdit = (e: any) => {
+    const onEdit = (e: PmEditEvent) => {
       const layer = e.layer ?? e.target;
       if (!layer) return;
+      const pmShape = (layer as L.Layer & { pm?: { _shape?: string } }).pm?._shape;
       const shapeType: GeofenceShape =
         layer instanceof L.Circle
           ? "circle"
-          : layer.pm?._shape === "Rectangle"
+          : pmShape === "Rectangle"
             ? "rectangle"
             : "polygon";
       pushShape(layer, shapeType);
