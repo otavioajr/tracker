@@ -1,3 +1,7 @@
+import Link from "next/link";
+import { Plus } from "lucide-react";
+
+import { buttonVariants } from "@/components/ui/button";
 import { getGeofences } from "@/lib/actions/geofences";
 import { GeofenceTable } from "@/components/geofences/geofence-table";
 
@@ -8,8 +12,11 @@ export default async function GeofencesPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Geocercas</h1>
+        <Link href="/geofences/new" className={buttonVariants({ size: "default" })}>
+          <Plus size={16} className="mr-1" />
+          Nova geocerca
+        </Link>
       </div>
-      <p className="text-muted-foreground text-sm">Desenho de geocercas no mapa sera adicionado em uma proxima versao.</p>
       <GeofenceTable geofences={geofences} />
     </div>
   );
