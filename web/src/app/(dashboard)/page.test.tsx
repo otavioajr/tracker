@@ -4,17 +4,21 @@ import React from "react";
 import { render } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
-const { mockGetLatestPositions, mockCreateClient, mockDashboardMap } = vi.hoisted(
-  () => ({
+const { mockGetLatestPositions, mockGetGeofences, mockCreateClient, mockDashboardMap } =
+  vi.hoisted(() => ({
     mockGetLatestPositions: vi.fn(),
+    mockGetGeofences: vi.fn(),
     mockCreateClient: vi.fn(),
     mockDashboardMap: vi.fn(),
-  })
-);
+  }));
 const mockGetUser = vi.fn();
 
 vi.mock("@/lib/actions/positions", () => ({
   getLatestPositions: mockGetLatestPositions,
+}));
+
+vi.mock("@/lib/actions/geofences", () => ({
+  getGeofences: mockGetGeofences,
 }));
 
 vi.mock("@/lib/supabase/server", () => ({
@@ -42,7 +46,10 @@ describe("DashboardPage", () => {
       },
     ];
 
+    const geofences: never[] = [];
+
     mockGetLatestPositions.mockResolvedValueOnce(positions);
+    mockGetGeofences.mockResolvedValueOnce(geofences);
     mockGetUser.mockResolvedValueOnce({
       data: {
         user: {
@@ -61,11 +68,13 @@ describe("DashboardPage", () => {
     render(page);
 
     expect(mockGetLatestPositions).toHaveBeenCalledTimes(1);
+    expect(mockGetGeofences).toHaveBeenCalledTimes(1);
     expect(mockCreateClient).toHaveBeenCalledTimes(1);
     expect(mockGetUser).toHaveBeenCalledTimes(1);
     expect(mockDashboardMap).toHaveBeenCalledTimes(1);
     expect(mockDashboardMap.mock.calls[0][0]).toEqual({
       initialPositions: positions,
+      initialGeofences: geofences,
       userId: "user-123",
     });
   });

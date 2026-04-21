@@ -326,6 +326,8 @@ describe("DashboardMap", () => {
         statusFilter: "moving",
         desktopRailOpen: false,
         activeTrailDeviceIds: ["truck-1"],
+        baseLayer: "Ruas",
+        showGeofences: true,
       });
     });
   });
