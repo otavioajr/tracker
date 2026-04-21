@@ -12,31 +12,6 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.4"
   }
-  graphql_public: {
-    Tables: {
-      [_ in never]: never
-    }
-    Views: {
-      [_ in never]: never
-    }
-    Functions: {
-      graphql: {
-        Args: {
-          extensions?: Json
-          operationName?: string
-          query?: string
-          variables?: Json
-        }
-        Returns: Json
-      }
-    }
-    Enums: {
-      [_ in never]: never
-    }
-    CompositeTypes: {
-      [_ in never]: never
-    }
-  }
   public: {
     Tables: {
       alert_rules: {
@@ -192,9 +167,12 @@ export type Database = {
         Row: {
           active: boolean
           area: unknown
+          center: unknown
           created_at: string
           id: string
           name: string
+          radius_m: number | null
+          shape_type: Database["public"]["Enums"]["geofence_shape"]
           tenant_id: string
           type: Database["public"]["Enums"]["geofence_type"]
           updated_at: string
@@ -202,9 +180,12 @@ export type Database = {
         Insert: {
           active?: boolean
           area: unknown
+          center?: unknown
           created_at?: string
           id?: string
           name: string
+          radius_m?: number | null
+          shape_type?: Database["public"]["Enums"]["geofence_shape"]
           tenant_id: string
           type?: Database["public"]["Enums"]["geofence_type"]
           updated_at?: string
@@ -212,9 +193,12 @@ export type Database = {
         Update: {
           active?: boolean
           area?: unknown
+          center?: unknown
           created_at?: string
           id?: string
           name?: string
+          radius_m?: number | null
+          shape_type?: Database["public"]["Enums"]["geofence_shape"]
           tenant_id?: string
           type?: Database["public"]["Enums"]["geofence_type"]
           updated_at?: string
@@ -706,6 +690,56 @@ export type Database = {
       }
     }
     Views: {
+      geofences_geojson: {
+        Row: {
+          active: boolean | null
+          area: Json | null
+          center: Json | null
+          created_at: string | null
+          id: string | null
+          name: string | null
+          radius_m: number | null
+          shape_type: Database["public"]["Enums"]["geofence_shape"] | null
+          tenant_id: string | null
+          type: Database["public"]["Enums"]["geofence_type"] | null
+          updated_at: string | null
+        }
+        Insert: {
+          active?: boolean | null
+          area?: never
+          center?: never
+          created_at?: string | null
+          id?: string | null
+          name?: string | null
+          radius_m?: number | null
+          shape_type?: Database["public"]["Enums"]["geofence_shape"] | null
+          tenant_id?: string | null
+          type?: Database["public"]["Enums"]["geofence_type"] | null
+          updated_at?: string | null
+        }
+        Update: {
+          active?: boolean | null
+          area?: never
+          center?: never
+          created_at?: string | null
+          id?: string | null
+          name?: string | null
+          radius_m?: number | null
+          shape_type?: Database["public"]["Enums"]["geofence_shape"] | null
+          tenant_id?: string | null
+          type?: Database["public"]["Enums"]["geofence_type"] | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "geofences_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       geography_columns: {
         Row: {
           coord_dimension: number | null
@@ -1649,6 +1683,7 @@ export type Database = {
       alert_severity: "info" | "warning" | "critical"
       alert_type: "speed" | "geofence" | "ignition" | "battery"
       device_protocol: "suntech" | "gt06"
+      geofence_shape: "polygon" | "rectangle" | "circle"
       geofence_type: "inclusion" | "exclusion"
       tenant_plan: "free" | "starter" | "pro" | "enterprise"
       user_role: "admin_platform" | "client"
@@ -1785,14 +1820,12 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
-  graphql_public: {
-    Enums: {},
-  },
   public: {
     Enums: {
       alert_severity: ["info", "warning", "critical"],
       alert_type: ["speed", "geofence", "ignition", "battery"],
       device_protocol: ["suntech", "gt06"],
+      geofence_shape: ["polygon", "rectangle", "circle"],
       geofence_type: ["inclusion", "exclusion"],
       tenant_plan: ["free", "starter", "pro", "enterprise"],
       user_role: ["admin_platform", "client"],
