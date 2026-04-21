@@ -16,6 +16,7 @@ import type {
   VehiclePosition,
 } from "@/components/map/types";
 import type { TrackingMapProps } from "@/components/map/tracking-map";
+import type { GeofenceRow } from "@/lib/geofences/types";
 import { Button } from "@/components/ui/button";
 import { useRealtimePositions } from "@/lib/hooks/use-realtime-positions";
 import {
@@ -128,10 +129,15 @@ const TrackingMap = dynamic<TrackingMapProps>(
 
 type DashboardMapProps = {
   initialPositions: VehiclePosition[];
+  initialGeofences: GeofenceRow[];
   userId?: string;
 };
 
-export function DashboardMap({ initialPositions, userId }: DashboardMapProps) {
+export function DashboardMap({
+  initialPositions,
+  initialGeofences,
+  userId,
+}: DashboardMapProps) {
   const positions = useRealtimePositions(initialPositions);
   const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(null);
   const [followedDeviceId, setFollowedDeviceId] = useState<string | null>(null);
@@ -142,6 +148,7 @@ export function DashboardMap({ initialPositions, userId }: DashboardMapProps) {
   const [baseLayer, setBaseLayer] = useState<MapBaseLayer>(
     DEFAULT_MAP_BASE_LAYER
   );
+  const [showGeofences, setShowGeofences] = useState<boolean>(true);
   const [mobileSheetState, setMobileSheetState] =
     useState<DashboardMobileSheetState>("collapsed");
   const [hydratedPreferencesUserId, setHydratedPreferencesUserId] =
@@ -179,6 +186,7 @@ export function DashboardMap({ initialPositions, userId }: DashboardMapProps) {
     setStatusFilter(preferences.statusFilter);
     setDesktopRailOpen(preferences.desktopRailOpen);
     setBaseLayer(preferences.baseLayer);
+    setShowGeofences(preferences.showGeofences);
     setMobileSheetState("collapsed");
     dispatchTrailState({
       type: "hydrate",
@@ -242,6 +250,7 @@ export function DashboardMap({ initialPositions, userId }: DashboardMapProps) {
       desktopRailOpen,
       activeTrailDeviceIds: Array.from(trailState.activeTrailDeviceIds),
       baseLayer,
+      showGeofences,
     });
   }, [
     userId,
@@ -251,6 +260,7 @@ export function DashboardMap({ initialPositions, userId }: DashboardMapProps) {
     desktopRailOpen,
     trailState.activeTrailDeviceIds,
     baseLayer,
+    showGeofences,
   ]);
 
   const filteredPositions = filterDashboardVehicles(positions, {
@@ -313,6 +323,9 @@ export function DashboardMap({ initialPositions, userId }: DashboardMapProps) {
           resetRotationTrigger={resetRotationTrigger}
           initialBaseLayer={baseLayer}
           onBaseLayerChange={setBaseLayer}
+          geofences={initialGeofences}
+          showGeofences={showGeofences}
+          onShowGeofencesChange={setShowGeofences}
         />
       ) : (
         <div className="flex h-full w-full items-center justify-center rounded-lg bg-card text-sm text-muted-foreground">

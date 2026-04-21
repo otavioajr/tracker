@@ -1,4 +1,5 @@
 import { getLatestPositions } from "@/lib/actions/positions";
+import { getGeofences } from "@/lib/actions/geofences";
 import { createClient } from "@/lib/supabase/server";
 import { DashboardMap } from "./dashboard-map";
 
@@ -12,10 +13,18 @@ export default async function DashboardPage() {
     throw new Error("Não autenticado");
   }
 
-  const positions = await getLatestPositions();
+  const [positions, geofences] = await Promise.all([
+    getLatestPositions(),
+    getGeofences(),
+  ]);
+
   return (
     <div className="h-full -m-4 -mb-24 lg:-m-6 lg:-mb-6">
-      <DashboardMap initialPositions={positions} userId={user.id} />
+      <DashboardMap
+        initialPositions={positions}
+        initialGeofences={geofences}
+        userId={user.id}
+      />
     </div>
   );
 }

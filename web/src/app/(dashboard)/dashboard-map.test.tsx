@@ -155,7 +155,11 @@ describe("DashboardMap", () => {
 
   function renderDashboardMap(initialPositions = positions) {
     return render(
-      <DashboardMap initialPositions={initialPositions} userId={USER_ID} />
+      <DashboardMap
+        initialPositions={initialPositions}
+        initialGeofences={[]}
+        userId={USER_ID}
+      />
     );
   }
 
@@ -280,13 +284,21 @@ describe("DashboardMap", () => {
     });
 
     view.rerender(
-      <DashboardMap initialPositions={positions} userId={USER_ID} />
+      <DashboardMap
+        initialPositions={positions}
+        initialGeofences={[]}
+        userId={USER_ID}
+      />
     );
 
     expect(await screen.findByText("trail-points:truck-1:0")).toBeTruthy();
 
     view.rerender(
-      <DashboardMap initialPositions={newerPositions} userId={USER_ID} />
+      <DashboardMap
+        initialPositions={newerPositions}
+        initialGeofences={[]}
+        userId={USER_ID}
+      />
     );
 
     expect(await screen.findByText("trail-points:truck-1:1")).toBeTruthy();
