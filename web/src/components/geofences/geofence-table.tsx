@@ -109,7 +109,9 @@ function GeofenceRowItem({ row }: { row: Row }) {
           }}
         >
           <SelectTrigger className="h-8">
-            <SelectValue />
+            <SelectValue>
+              {(v) => (v === "exclusion" ? "Zona proibida" : "Zona permitida")}
+            </SelectValue>
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="inclusion">Zona permitida</SelectItem>

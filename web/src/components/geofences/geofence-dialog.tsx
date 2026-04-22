@@ -82,7 +82,9 @@ export function GeofenceDialog({
             <Label htmlFor="geofence-type">Tipo</Label>
             <Select value={type} onValueChange={(v) => setType(v as GeofenceType)}>
               <SelectTrigger id="geofence-type">
-                <SelectValue />
+                <SelectValue>
+                  {(v) => (v === "exclusion" ? "Zona proibida" : "Zona permitida")}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="inclusion">Zona permitida</SelectItem>
