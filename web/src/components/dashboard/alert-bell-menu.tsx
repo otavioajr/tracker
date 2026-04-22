@@ -53,7 +53,7 @@ export function AlertBellMenu({
       <DropdownMenuContent
         align="end"
         sideOffset={8}
-        className="w-[min(24rem,calc(100vw-1rem))] rounded-xl p-0"
+        className="z-[1100] w-[min(24rem,calc(100vw-1rem))] rounded-xl p-0"
       >
         <div className="border-b px-4 py-3">
           <div className="text-sm font-semibold text-foreground">Alertas</div>

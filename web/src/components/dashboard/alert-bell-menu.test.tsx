@@ -1,15 +1,43 @@
 // @vitest-environment jsdom
 
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { describe, expect, it, vi, beforeEach } from "vitest";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
+
+import type { AlertFeedAlert } from "@/components/alerts/alert-feed";
 
 import { AlertBellMenu } from "./alert-bell-menu";
-import type { AlertFeedAlert } from "@/components/alerts/alert-feed";
-import { markAlertRead } from "@/lib/actions/alerts";
 
-vi.mock("@/lib/actions/alerts", () => ({
-  markAlertRead: vi.fn(),
+vi.mock("@/components/alerts/alert-feed", () => ({
+  AlertFeed: AlertFeedMock,
 }));
+
+function AlertFeedMock({
+  alerts,
+  onAlertRead,
+}: {
+  alerts: AlertFeedAlert[];
+  variant?: "page" | "dropdown";
+  onAlertRead?: (id: string) => void;
+}) {
+  return (
+    <div>
+      {alerts.map((alert) => (
+        <div key={alert.id}>
+          <p>{alert.message}</p>
+          {!alert.read ? (
+            <button
+              type="button"
+              aria-label="Marcar alerta como lido"
+              onClick={() => onAlertRead?.(alert.id)}
+            >
+              Marcar alerta como lido
+            </button>
+          ) : null}
+        </div>
+      ))}
+    </div>
+  );
+}
 
 const alerts: AlertFeedAlert[] = [
   {
@@ -26,34 +54,58 @@ const alerts: AlertFeedAlert[] = [
   },
 ];
 
-describe("AlertBellMenu", () => {
-  beforeEach(() => {
-    vi.mocked(markAlertRead).mockReset();
-  });
+function getTrigger(label: string) {
+  const trigger = document.querySelector<HTMLButtonElement>(
+    `button[data-slot="dropdown-menu-trigger"][aria-label="${label}"][aria-expanded="false"]`
+  );
 
+  expect(trigger).toBeTruthy();
+  return trigger as HTMLButtonElement;
+}
+
+function getMenu() {
+  const menu = document.querySelector<HTMLElement>('[role="menu"]');
+  expect(menu).toBeTruthy();
+  return menu as HTMLElement;
+}
+
+describe("AlertBellMenu", () => {
   it("opens the dropdown and shows recent alerts", async () => {
     render(<AlertBellMenu initialAlerts={alerts} initialUnreadCount={2} />);
 
-    fireEvent.click(screen.getByRole("button", { name: /alertas \(2 não lidos\)/i }));
+    fireEvent.click(getTrigger("Alertas (2 não lidos)"));
 
     expect(await screen.findByText("Alertas")).toBeTruthy();
     expect(screen.getByText("2 não lidos")).toBeTruthy();
     expect(screen.getByText("Excesso de velocidade detectado")).toBeTruthy();
 
-    const link = screen.getByRole("link", { name: "Ver todos" });
+    const link = within(getMenu()).getByRole("link", {
+      name: "Ver todos",
+    });
     expect(link.getAttribute("href")).toBe("/alerts");
   });
 
   it("decrements the badge when one unread alert is marked as read", async () => {
-    vi.mocked(markAlertRead).mockResolvedValue(undefined);
-
     render(<AlertBellMenu initialAlerts={alerts} initialUnreadCount={2} />);
 
-    fireEvent.click(screen.getAllByRole("button", { name: /alertas \(2 não lidos\)/i })[1]);
-    fireEvent.click((await screen.findAllByRole("button", { name: "Marcar alerta como lido" }))[0]);
+    fireEvent.click(getTrigger("Alertas (2 não lidos)"));
 
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: /alertas \(1 não lidos\)/i })).toBeTruthy();
+      expect(within(getMenu()).getByText("Excesso de velocidade detectado")).toBeTruthy();
+    });
+
+    fireEvent.click(
+      within(getMenu()).getByRole("button", {
+        name: "Marcar alerta como lido",
+      })
+    );
+
+    await waitFor(() => {
+      expect(
+        document.querySelector(
+          'button[data-slot="dropdown-menu-trigger"][aria-label="Alertas (1 não lidos)"]'
+        )
+      ).toBeTruthy();
     });
   });
 
@@ -66,11 +118,13 @@ describe("AlertBellMenu", () => {
       />
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Alertas" }));
+    fireEvent.click(getTrigger("Alertas"));
 
     expect(await screen.findByText("Não foi possível carregar os alertas.")).toBeTruthy();
 
-    const link = screen.getAllByRole("link", { name: "Ver todos" })[0];
+    const link = within(getMenu()).getByRole("link", {
+      name: "Ver todos",
+    });
     expect(link.getAttribute("href")).toBe("/alerts");
   });
 });
