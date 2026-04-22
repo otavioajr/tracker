@@ -109,6 +109,22 @@ describe("AlertBellMenu", () => {
     });
   });
 
+  it("applies the Leaflet-safe z-index on the shared dropdown positioner", async () => {
+    render(<AlertBellMenu initialAlerts={alerts} initialUnreadCount={2} />);
+
+    fireEvent.click(getTrigger("Alertas (2 não lidos)"));
+
+    const menus = await screen.findAllByRole("menu");
+    const menu = menus.find((candidate) =>
+      candidate.textContent?.includes("2 não lidos")
+    );
+    const positioner = menu.parentElement;
+
+    expect(menu).toBeTruthy();
+    expect(positioner).toBeTruthy();
+    expect(positioner?.className).toContain("z-[1100]");
+  });
+
   it("shows the load error state without breaking the footer link", async () => {
     render(
       <AlertBellMenu
