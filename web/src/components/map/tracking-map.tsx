@@ -3,6 +3,7 @@
 import "leaflet/leaflet.css";
 import { useRef } from "react";
 import dynamic from "next/dynamic";
+import { MapPinned } from "lucide-react";
 import type { DashboardVehicleTrail, VehiclePosition } from "./types";
 import {
   DEFAULT_MAP_BASE_LAYER,
@@ -182,18 +183,28 @@ export function TrackingMap({
         />
       ))}
       </MapContainer>
-      <label
-        className="absolute right-3 top-[210px] z-[500] flex items-center gap-1.5 rounded-md border border-border bg-background/95 px-2 py-1.5 text-xs font-medium shadow-md cursor-pointer hover:bg-muted"
-        title="Mostrar geocercas no mapa"
+      <button
+        type="button"
+        onClick={() => onShowGeofencesChange(!showGeofences)}
+        aria-pressed={showGeofences}
+        title={showGeofences ? "Ocultar geocercas" : "Mostrar geocercas"}
+        className={`group absolute right-3 top-[205px] z-[500] flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium shadow-md ring-1 backdrop-blur-md transition-all duration-200 ease-out hover:scale-[1.02] active:scale-[0.98] ${
+          showGeofences
+            ? "bg-emerald-500/15 text-emerald-700 ring-emerald-500/30 hover:bg-emerald-500/25 dark:bg-emerald-400/15 dark:text-emerald-300 dark:ring-emerald-400/30"
+            : "bg-background/80 text-muted-foreground ring-border/60 hover:text-foreground hover:ring-border"
+        }`}
       >
-        <input
-          type="checkbox"
-          checked={showGeofences}
-          onChange={(e) => onShowGeofencesChange(e.target.checked)}
-          className="h-3.5 w-3.5 cursor-pointer"
+        <MapPinned className="h-3.5 w-3.5 shrink-0" strokeWidth={2.25} />
+        <span className="leading-none">Geocercas</span>
+        <span
+          className={`h-1.5 w-1.5 shrink-0 rounded-full transition-colors ${
+            showGeofences
+              ? "bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.8)]"
+              : "bg-muted-foreground/40"
+          }`}
+          aria-hidden
         />
-        Geocercas
-      </label>
+      </button>
     </div>
   );
 }
