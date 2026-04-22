@@ -36,7 +36,7 @@ function AlertFeedMock({
                 onAlertRead?.(alert.id);
                 window.dispatchEvent(
                   new CustomEvent(ALERT_READ_EVENT, {
-                    detail: { id: alert.id },
+                    detail: { id: alert.id, newlyRead: true },
                   })
                 );
               }}
@@ -135,7 +135,7 @@ describe("AlertBellMenu", () => {
 
     window.dispatchEvent(
       new CustomEvent(ALERT_READ_EVENT, {
-        detail: { id: "alert-99" },
+        detail: { id: "alert-99", newlyRead: true },
       })
     );
 
@@ -157,12 +157,12 @@ describe("AlertBellMenu", () => {
 
     window.dispatchEvent(
       new CustomEvent(ALERT_READ_EVENT, {
-        detail: { id: "alert-1" },
+        detail: { id: "alert-1", newlyRead: true },
       })
     );
     window.dispatchEvent(
       new CustomEvent(ALERT_READ_EVENT, {
-        detail: { id: "alert-1" },
+        detail: { id: "alert-1", newlyRead: true },
       })
     );
 
@@ -195,6 +195,28 @@ describe("AlertBellMenu", () => {
     });
 
     expect(within(getPopover()).getByText("5 não lidos")).toBeTruthy();
+  });
+
+  it("keeps local sync for already-read reconciliation events without decrementing the badge", async () => {
+    render(<AlertBellMenu initialAlerts={alerts} initialUnreadCount={2} />);
+
+    fireEvent.click(getTrigger("Alertas (2 não lidos)"));
+
+    window.dispatchEvent(
+      new CustomEvent(ALERT_READ_EVENT, {
+        detail: { id: "alert-1", newlyRead: false },
+      })
+    );
+
+    await waitFor(() => {
+      expect(within(getPopover()).getByText("2 não lidos")).toBeTruthy();
+    });
+
+    expect(
+      document.querySelector(
+        'button[data-slot="popover-trigger"][aria-label="Alertas (2 não lidos)"]'
+      )
+    ).toBeTruthy();
   });
 
   it("applies the Leaflet-safe z-index on the shared popover positioner", async () => {

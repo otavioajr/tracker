@@ -34,17 +34,22 @@ export function AlertBellMenu({
   }, [initialUnreadCount]);
 
   useEffect(() => {
-    function applyReadEvent(id?: string) {
-      if (!id || processedReadIdsRef.current.has(id)) return;
+    function applyReadEvent(id?: string, newlyRead?: boolean) {
+      if (!id || newlyRead !== true || processedReadIdsRef.current.has(id)) {
+        return;
+      }
 
       processedReadIdsRef.current.add(id);
       setUnreadCount((current) => Math.max(0, current - 1));
     }
 
     function handleExternalAlertRead(event: Event) {
-      const { detail } = event as CustomEvent<{ id?: string }>;
+      const { detail } = event as CustomEvent<{
+        id?: string;
+        newlyRead?: boolean;
+      }>;
 
-      applyReadEvent(detail?.id);
+      applyReadEvent(detail?.id, detail?.newlyRead);
     }
 
     window.addEventListener(ALERT_READ_EVENT, handleExternalAlertRead);

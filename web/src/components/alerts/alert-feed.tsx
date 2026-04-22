@@ -10,12 +10,17 @@ import { useEffect, useState } from "react";
 
 export const ALERT_READ_EVENT = "tracker:alert-read";
 
-function dispatchAlertReadEvent(id: string) {
+type AlertReadEventDetail = {
+  id: string;
+  newlyRead: boolean;
+};
+
+function dispatchAlertReadEvent(detail: AlertReadEventDetail) {
   if (typeof window === "undefined") return;
 
   window.dispatchEvent(
-    new CustomEvent<{ id: string }>(ALERT_READ_EVENT, {
-      detail: { id },
+    new CustomEvent<AlertReadEventDetail>(ALERT_READ_EVENT, {
+      detail,
     })
   );
 }
@@ -98,7 +103,7 @@ export function AlertFeed({
 
   useEffect(() => {
     function handleAlertRead(event: Event) {
-      const { detail } = event as CustomEvent<{ id?: string }>;
+      const { detail } = event as CustomEvent<AlertReadEventDetail>;
       const id = detail?.id;
 
       if (!id) return;
@@ -124,11 +129,15 @@ export function AlertFeed({
         return;
       }
 
+      const newlyRead = !result?.alreadyRead;
+
       setItems((current) =>
         current.map((item) => (item.id === id ? { ...item, read: true } : item))
       );
-      dispatchAlertReadEvent(id);
-      onAlertRead?.(id);
+      dispatchAlertReadEvent({ id, newlyRead });
+      if (newlyRead) {
+        onAlertRead?.(id);
+      }
     } catch {
       return;
     } finally {

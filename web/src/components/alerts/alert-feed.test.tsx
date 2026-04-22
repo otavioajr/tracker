@@ -69,8 +69,11 @@ describe("AlertFeed", () => {
     await waitFor(() => expect(markAlertRead).toHaveBeenCalledWith("alert-1"));
     await waitFor(() => expect(listener).toHaveBeenCalledTimes(1));
 
-    const event = listener.mock.calls[0]?.[0] as CustomEvent<{ id: string }>;
-    expect(event.detail).toEqual({ id: "alert-1" });
+    const event = listener.mock.calls[0]?.[0] as CustomEvent<{
+      id: string;
+      newlyRead: boolean;
+    }>;
+    expect(event.detail).toEqual({ id: "alert-1", newlyRead: true });
     expect(screen.queryByRole("button", { name: /marcar alerta como lido/i })).toBeNull();
 
     window.removeEventListener(ALERT_READ_EVENT, listener as EventListener);
@@ -115,17 +118,29 @@ describe("AlertFeed", () => {
     expect(screen.getByRole("button", { name: /marcar alerta como lido/i })).toBeTruthy();
   });
 
-  it("collapses the local unread state when the action resolves as already read", async () => {
+  it("collapses the local unread state when the action resolves as already read elsewhere without calling the fresh-read callback", async () => {
     markAlertRead.mockResolvedValueOnce({ success: true, alreadyRead: true });
     const onAlertRead = vi.fn();
+    const listener = vi.fn();
+
+    window.addEventListener(ALERT_READ_EVENT, listener as EventListener);
 
     render(<AlertFeed alerts={alerts} variant="dropdown" onAlertRead={onAlertRead} />);
 
     fireEvent.click(screen.getByRole("button", { name: /marcar alerta como lido/i }));
 
     await waitFor(() => expect(markAlertRead).toHaveBeenCalledWith("alert-1"));
-    await waitFor(() => expect(onAlertRead).toHaveBeenCalledWith("alert-1"));
+    await waitFor(() => expect(listener).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(onAlertRead).not.toHaveBeenCalled());
+
+    const event = listener.mock.calls[0]?.[0] as CustomEvent<{
+      id: string;
+      newlyRead: boolean;
+    }>;
+    expect(event.detail).toEqual({ id: "alert-1", newlyRead: false });
     expect(screen.queryByRole("button", { name: /marcar alerta como lido/i })).toBeNull();
+
+    window.removeEventListener(ALERT_READ_EVENT, listener as EventListener);
   });
 
   it("keeps the unread alert actionable when marking read rejects", async () => {
