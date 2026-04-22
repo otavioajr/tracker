@@ -61,21 +61,8 @@ const BaseLayerListenerDynamic = dynamic(
   { ssr: false }
 );
 
-const LayersControlOverlay = dynamic(
-  () => import("react-leaflet").then((m) => {
-    const LC = m.LayersControl;
-    return { default: LC.Overlay };
-  }),
-  { ssr: false }
-);
-
 const GeofenceLayerDynamic = dynamic(
   () => import("@/components/geofences/geofence-layer").then((m) => m.GeofenceLayer),
-  { ssr: false }
-);
-
-const OverlayListenerDynamic = dynamic(
-  () => import("./overlay-listener").then((m) => m.OverlayListener),
   { ssr: false }
 );
 
@@ -133,13 +120,14 @@ export function TrackingMap({
   const rotationInteractionRef = useRef({ isRotating: false });
 
   return (
-    <MapContainer
-      center={center}
-      zoom={12}
-      style={{ width: "100%", height: "100%", minHeight: 400 }}
-      className={className}
-      {...({ rotate: rotationEnabled } as Record<string, unknown>)}
-    >
+    <div className="relative" style={{ width: "100%", height: "100%", minHeight: 400 }}>
+      <MapContainer
+        center={center}
+        zoom={12}
+        style={{ width: "100%", height: "100%", minHeight: 400 }}
+        className={className}
+        {...({ rotate: rotationEnabled } as Record<string, unknown>)}
+      >
       <LayersControl position="topright">
         <LayersControlBaseLayer checked={activeBaseLayer === "Ruas"} name="Ruas">
           <TileLayer
@@ -165,12 +153,9 @@ export function TrackingMap({
             url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
           />
         </LayersControlBaseLayer>
-        <LayersControlOverlay checked={showGeofences} name="Geocercas">
-          <GeofenceLayerDynamic geofences={geofences} />
-        </LayersControlOverlay>
       </LayersControl>
       <BaseLayerListenerDynamic onChange={handleBaseLayerChange} />
-      <OverlayListenerDynamic overlayName="Geocercas" onChange={onShowGeofencesChange} />
+      {showGeofences && <GeofenceLayerDynamic geofences={geofences} />}
       <MapControllerDynamic
         followedDeviceId={followedDeviceId}
         positions={positions}
@@ -196,6 +181,19 @@ export function TrackingMap({
           onFollow={onFollow}
         />
       ))}
-    </MapContainer>
+      </MapContainer>
+      <label
+        className="absolute right-3 top-[210px] z-[500] flex items-center gap-1.5 rounded-md border border-border bg-background/95 px-2 py-1.5 text-xs font-medium shadow-md cursor-pointer hover:bg-muted"
+        title="Mostrar geocercas no mapa"
+      >
+        <input
+          type="checkbox"
+          checked={showGeofences}
+          onChange={(e) => onShowGeofencesChange(e.target.checked)}
+          className="h-3.5 w-3.5 cursor-pointer"
+        />
+        Geocercas
+      </label>
+    </div>
   );
 }
