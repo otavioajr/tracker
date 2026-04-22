@@ -39,6 +39,7 @@ export async function markAlertRead(id: string) {
   if (error) return { error: error.message };
   if (data) {
     revalidatePath("/alerts");
+    revalidatePath("/", "layout");
     return { success: true };
   }
 
@@ -51,6 +52,7 @@ export async function markAlertRead(id: string) {
   if (alertError) return { error: alertError.message };
   if (alert?.read) {
     revalidatePath("/alerts");
+    revalidatePath("/", "layout");
     return { success: true, alreadyRead: true };
   }
 

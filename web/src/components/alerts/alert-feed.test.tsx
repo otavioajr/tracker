@@ -118,7 +118,7 @@ describe("AlertFeed", () => {
     expect(screen.getByRole("button", { name: /marcar alerta como lido/i })).toBeTruthy();
   });
 
-  it("collapses the local unread state when the action resolves as already read elsewhere without calling the fresh-read callback", async () => {
+  it("collapses the local unread state when the action resolves as already read elsewhere and still calls the fresh-read callback", async () => {
     markAlertRead.mockResolvedValueOnce({ success: true, alreadyRead: true });
     const onAlertRead = vi.fn();
     const listener = vi.fn();
