@@ -12,7 +12,7 @@ export const ALERT_READ_EVENT = "tracker:alert-read";
 
 type AlertReadEventDetail = {
   id: string;
-  newlyRead: boolean;
+  countChanged: boolean;
 };
 
 function dispatchAlertReadEvent(detail: AlertReadEventDetail) {
@@ -136,7 +136,7 @@ export function AlertFeed({
       );
 
       if (wasUnread) {
-        dispatchAlertReadEvent({ id, newlyRead: true });
+        dispatchAlertReadEvent({ id, countChanged: true });
         onAlertRead?.(id);
       }
     } catch {

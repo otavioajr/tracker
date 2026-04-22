@@ -21,25 +21,69 @@ type AlertBellMenuProps = {
   hasLoadError?: boolean;
 };
 
-type UnreadCountAction =
-  | { type: "sync"; count: number }
-  | { type: "decrement" };
+type AlertBellMenuState = {
+  alerts: AlertFeedAlert[];
+  unreadCount: number;
+};
+
+type AlertBellMenuAction =
+  | {
+      type: "sync";
+      alerts: AlertFeedAlert[];
+      unreadCount: number;
+    }
+  | {
+      type: "mark-read";
+      id: string;
+      countChanged: boolean;
+    };
+
+function markAlertReadInList(alerts: AlertFeedAlert[], id: string) {
+  let changed = false;
+  const next = alerts.map((alert) => {
+    if (alert.id !== id || alert.read) {
+      return alert;
+    }
+
+    changed = true;
+    return { ...alert, read: true };
+  });
+
+  return changed ? next : alerts;
+}
+
+function alertBellMenuReducer(
+  state: AlertBellMenuState,
+  action: AlertBellMenuAction
+): AlertBellMenuState {
+  if (action.type === "sync") {
+    return {
+      alerts: action.alerts,
+      unreadCount: action.unreadCount,
+    };
+  }
+
+  const nextAlerts = markAlertReadInList(state.alerts, action.id);
+
+  if (!action.countChanged) {
+    return nextAlerts === state.alerts ? state : { ...state, alerts: nextAlerts };
+  }
+
+  return {
+    alerts: nextAlerts,
+    unreadCount: Math.max(0, state.unreadCount - 1),
+  };
+}
 
 export function AlertBellMenu({
   initialAlerts,
   initialUnreadCount,
   hasLoadError = false,
 }: AlertBellMenuProps) {
-  const [unreadCount, dispatchUnreadCount] = useReducer(
-    (current: number, action: UnreadCountAction) => {
-      if (action.type === "sync") {
-        return action.count;
-      }
-
-      return Math.max(0, current - 1);
-    },
-    initialUnreadCount
-  );
+  const [{ alerts, unreadCount }, dispatch] = useReducer(alertBellMenuReducer, {
+    alerts: initialAlerts,
+    unreadCount: initialUnreadCount,
+  });
   const processedReadIdsRef = useRef<Set<string>>(
     new Set(
       initialAlerts.filter((alert) => alert.read).map((alert) => alert.id)
@@ -50,26 +94,35 @@ export function AlertBellMenu({
     processedReadIdsRef.current = new Set(
       initialAlerts.filter((alert) => alert.read).map((alert) => alert.id)
     );
-    dispatchUnreadCount({ type: "sync", count: initialUnreadCount });
+    dispatch({
+      type: "sync",
+      alerts: initialAlerts,
+      unreadCount: initialUnreadCount,
+    });
   }, [initialAlerts, initialUnreadCount]);
 
   useEffect(() => {
-    function applyReadEvent(id?: string, newlyRead?: boolean) {
-      if (!id || newlyRead !== true || processedReadIdsRef.current.has(id)) {
+    function applyReadEvent(id?: string, countChanged?: boolean) {
+      if (!id) {
+        return;
+      }
+
+      if (countChanged !== true || processedReadIdsRef.current.has(id)) {
+        dispatch({ type: "mark-read", id, countChanged: false });
         return;
       }
 
       processedReadIdsRef.current.add(id);
-      dispatchUnreadCount({ type: "decrement" });
+      dispatch({ type: "mark-read", id, countChanged: true });
     }
 
     function handleExternalAlertRead(event: Event) {
       const { detail } = event as CustomEvent<{
         id?: string;
-        newlyRead?: boolean;
+        countChanged?: boolean;
       }>;
 
-      applyReadEvent(detail?.id, detail?.newlyRead);
+      applyReadEvent(detail?.id, detail?.countChanged);
     }
 
     window.addEventListener(ALERT_READ_EVENT, handleExternalAlertRead);
@@ -88,10 +141,13 @@ export function AlertBellMenu({
     unreadCount > 0 ? `${unreadCount} não lidos` : "Nenhum novo alerta";
 
   function handleAlertRead(id: string) {
-    if (processedReadIdsRef.current.has(id)) return;
+    if (processedReadIdsRef.current.has(id)) {
+      dispatch({ type: "mark-read", id, countChanged: false });
+      return;
+    }
 
     processedReadIdsRef.current.add(id);
-    dispatchUnreadCount({ type: "decrement" });
+    dispatch({ type: "mark-read", id, countChanged: true });
   }
 
   return (
@@ -126,7 +182,7 @@ export function AlertBellMenu({
             </p>
           ) : (
             <AlertFeed
-              alerts={initialAlerts}
+              alerts={alerts}
               variant="dropdown"
               onAlertRead={handleAlertRead}
             />

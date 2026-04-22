@@ -90,4 +90,75 @@ describe("AlertBellMenu integration", () => {
 
     expect(within(getPopover()).getByText("1 não lidos")).toBeTruthy();
   });
+
+  it.each([
+    { result: { success: true }, label: "fresh success" },
+    {
+      result: { success: true, alreadyRead: true },
+      label: "idempotent success",
+    },
+  ])(
+    "keeps the bell list synced after close and reopen on $label",
+    async ({ result }) => {
+      markAlertRead.mockResolvedValueOnce(result);
+
+      render(<AlertBellMenu initialAlerts={alerts} initialUnreadCount={1} />);
+
+      fireEvent.click(getTrigger("Alertas (1 não lidos)"));
+
+      await waitFor(() => {
+        expect(
+          within(getPopover()).getByRole("button", {
+            name: "Marcar alerta como lido",
+          })
+        ).toBeTruthy();
+      });
+
+      fireEvent.click(
+        within(getPopover()).getByRole("button", {
+          name: "Marcar alerta como lido",
+        })
+      );
+
+      await waitFor(() => {
+        expect(markAlertRead).toHaveBeenCalledWith("alert-1");
+      });
+
+      await waitFor(() => {
+        expect(
+          document.querySelector(
+            'button[data-slot="popover-trigger"][aria-label="Alertas"]'
+          )
+        ).toBeTruthy();
+      });
+
+      expect(within(getPopover()).getByText("Nenhum novo alerta")).toBeTruthy();
+      expect(
+        within(getPopover()).queryByRole("button", {
+          name: "Marcar alerta como lido",
+        })
+      ).toBeNull();
+
+      fireEvent.click(getTrigger("Alertas"));
+      await waitFor(() => {
+        expect(
+          document.querySelector(
+            'button[data-slot="popover-trigger"][aria-label="Alertas"][aria-expanded="false"]'
+          )
+        ).toBeTruthy();
+      });
+
+      fireEvent.click(getTrigger("Alertas"));
+
+      await waitFor(() => {
+        expect(within(getPopover()).getByText("Nenhum novo alerta")).toBeTruthy();
+      });
+
+      expect(
+        within(getPopover()).queryByRole("button", {
+          name: "Marcar alerta como lido",
+        })
+      ).toBeNull();
+    }
+  );
 });

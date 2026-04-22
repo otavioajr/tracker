@@ -71,9 +71,9 @@ describe("AlertFeed", () => {
 
     const event = listener.mock.calls[0]?.[0] as CustomEvent<{
       id: string;
-      newlyRead: boolean;
+      countChanged: boolean;
     }>;
-    expect(event.detail).toEqual({ id: "alert-1", newlyRead: true });
+    expect(event.detail).toEqual({ id: "alert-1", countChanged: true });
     expect(screen.queryByRole("button", { name: /marcar alerta como lido/i })).toBeNull();
 
     window.removeEventListener(ALERT_READ_EVENT, listener as EventListener);
@@ -135,9 +135,9 @@ describe("AlertFeed", () => {
 
     const event = listener.mock.calls[0]?.[0] as CustomEvent<{
       id: string;
-      newlyRead: boolean;
+      countChanged: boolean;
     }>;
-    expect(event.detail).toEqual({ id: "alert-1", newlyRead: true });
+    expect(event.detail).toEqual({ id: "alert-1", countChanged: true });
     expect(screen.queryByRole("button", { name: /marcar alerta como lido/i })).toBeNull();
 
     window.removeEventListener(ALERT_READ_EVENT, listener as EventListener);

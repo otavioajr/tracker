@@ -36,7 +36,7 @@ function AlertFeedMock({
                 onAlertRead?.(alert.id);
                 window.dispatchEvent(
                   new CustomEvent(ALERT_READ_EVENT, {
-                    detail: { id: alert.id, newlyRead: true },
+                    detail: { id: alert.id, countChanged: true },
                   })
                 );
               }}
@@ -74,6 +74,15 @@ afterEach(() => {
 function getTrigger(label: string) {
   const trigger = document.querySelector<HTMLButtonElement>(
     `button[data-slot="popover-trigger"][aria-label="${label}"][aria-expanded="false"]`
+  );
+
+  expect(trigger).toBeTruthy();
+  return trigger as HTMLButtonElement;
+}
+
+function getTriggerAnyState(label: string) {
+  const trigger = document.querySelector<HTMLButtonElement>(
+    `button[data-slot="popover-trigger"][aria-label="${label}"]`
   );
 
   expect(trigger).toBeTruthy();
@@ -143,7 +152,7 @@ describe("AlertBellMenu", () => {
 
     window.dispatchEvent(
       new CustomEvent(ALERT_READ_EVENT, {
-        detail: { id: "alert-99", newlyRead: true },
+        detail: { id: "alert-99", countChanged: true },
       })
     );
 
@@ -167,12 +176,12 @@ describe("AlertBellMenu", () => {
 
     window.dispatchEvent(
       new CustomEvent(ALERT_READ_EVENT, {
-        detail: { id: "alert-1", newlyRead: true },
+        detail: { id: "alert-1", countChanged: true },
       })
     );
     window.dispatchEvent(
       new CustomEvent(ALERT_READ_EVENT, {
-        detail: { id: "alert-1", newlyRead: true },
+        detail: { id: "alert-1", countChanged: true },
       })
     );
 
@@ -198,7 +207,7 @@ describe("AlertBellMenu", () => {
 
     window.dispatchEvent(
       new CustomEvent(ALERT_READ_EVENT, {
-        detail: { id: "alert-1", newlyRead: true },
+        detail: { id: "alert-1", countChanged: true },
       })
     );
 
@@ -224,7 +233,7 @@ describe("AlertBellMenu", () => {
 
     window.dispatchEvent(
       new CustomEvent(ALERT_READ_EVENT, {
-        detail: { id: "alert-1", newlyRead: true },
+        detail: { id: "alert-1", countChanged: true },
       })
     );
 
@@ -268,7 +277,7 @@ describe("AlertBellMenu", () => {
 
     window.dispatchEvent(
       new CustomEvent(ALERT_READ_EVENT, {
-        detail: { id: "alert-1", newlyRead: true },
+        detail: { id: "alert-1", countChanged: true },
       })
     );
 
@@ -316,7 +325,7 @@ describe("AlertBellMenu", () => {
       />
     );
 
-    fireEvent.click(getTrigger("Alertas"));
+    fireEvent.click(getTriggerAnyState("Alertas"));
 
     expect(await screen.findByText("Não foi possível carregar os alertas.")).toBeTruthy();
 
@@ -324,5 +333,56 @@ describe("AlertBellMenu", () => {
       name: "Ver todos",
     });
     expect(link.getAttribute("href")).toBe("/alerts");
+  });
+
+  it("keeps the lifted alert list in sync after closing and reopening the popover", async () => {
+    const alerts = buildAlerts();
+
+    render(<AlertBellMenu initialAlerts={alerts} initialUnreadCount={1} />);
+
+    fireEvent.click(getTrigger("Alertas (1 não lidos)"));
+
+    await waitFor(() => {
+      expect(
+        within(getPopover()).getByRole("button", {
+          name: "Marcar alerta como lido",
+        })
+      ).toBeTruthy();
+    });
+
+    fireEvent.click(
+      within(getPopover()).getByRole("button", {
+        name: "Marcar alerta como lido",
+      })
+    );
+
+    await waitFor(() => {
+      expect(
+        document.querySelector(
+          'button[data-slot="popover-trigger"][aria-label="Alertas"]'
+        )
+      ).toBeTruthy();
+    });
+
+    fireEvent.click(getTriggerAnyState("Alertas"));
+    await waitFor(() => {
+      expect(
+        document.querySelector(
+          'button[data-slot="popover-trigger"][aria-label="Alertas"][aria-expanded="false"]'
+        )
+      ).toBeTruthy();
+    });
+
+    fireEvent.click(getTrigger("Alertas"));
+
+    await waitFor(() => {
+      expect(within(getPopover()).getByText("Nenhum novo alerta")).toBeTruthy();
+    });
+
+    expect(
+      within(getPopover()).queryByRole("button", {
+        name: "Marcar alerta como lido",
+      })
+    ).toBeNull();
   });
 });
