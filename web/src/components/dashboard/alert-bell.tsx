@@ -17,9 +17,7 @@ export async function AlertBell() {
   ).length;
   const initialUnreadCount =
     countResult.status === "fulfilled"
-      ? countResult.value === 0 && unreadCountFromLoadedAlerts > 0
-        ? unreadCountFromLoadedAlerts
-        : countResult.value
+      ? Math.max(countResult.value, unreadCountFromLoadedAlerts)
       : unreadCountFromLoadedAlerts;
   const hasLoadError = alertsResult.status === "rejected";
 

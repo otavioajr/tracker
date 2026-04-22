@@ -115,6 +115,19 @@ describe("AlertFeed", () => {
     expect(screen.getByRole("button", { name: /marcar alerta como lido/i })).toBeTruthy();
   });
 
+  it("collapses the local unread state when the action resolves as already read", async () => {
+    markAlertRead.mockResolvedValueOnce({ success: true, alreadyRead: true });
+    const onAlertRead = vi.fn();
+
+    render(<AlertFeed alerts={alerts} variant="dropdown" onAlertRead={onAlertRead} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /marcar alerta como lido/i }));
+
+    await waitFor(() => expect(markAlertRead).toHaveBeenCalledWith("alert-1"));
+    await waitFor(() => expect(onAlertRead).toHaveBeenCalledWith("alert-1"));
+    expect(screen.queryByRole("button", { name: /marcar alerta como lido/i })).toBeNull();
+  });
+
   it("keeps the unread alert actionable when marking read rejects", async () => {
     markAlertRead.mockRejectedValueOnce(new Error("boom"));
     const onAlertRead = vi.fn();

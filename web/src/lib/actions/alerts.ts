@@ -37,9 +37,24 @@ export async function markAlertRead(id: string) {
     .maybeSingle();
 
   if (error) return { error: error.message };
-  if (!data) return { error: "Alert already read or not found." };
-  revalidatePath("/alerts");
-  return { success: true };
+  if (data) {
+    revalidatePath("/alerts");
+    return { success: true };
+  }
+
+  const { data: alert, error: alertError } = await supabase
+    .from("alerts")
+    .select("id, read")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (alertError) return { error: alertError.message };
+  if (alert?.read) {
+    revalidatePath("/alerts");
+    return { success: true, alreadyRead: true };
+  }
+
+  return { error: "Alert not found or inaccessible." };
 }
 
 export async function getAlertRules() {

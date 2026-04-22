@@ -161,4 +161,47 @@ describe("AlertBell", () => {
       hasLoadError: false,
     });
   });
+
+  it("uses the higher unread count from loaded alerts when the count query is stale low", async () => {
+    const alerts: AlertFeedAlert[] = [
+      {
+        id: "alert-1",
+        type: "Velocidade",
+        severity: "warning",
+        message: "Excesso de velocidade detectado",
+        read: false,
+        created_at: "2026-04-22T10:00:00.000Z",
+        devices: {
+          imei: "123456789012345",
+          vehicles: { plate: "ABC1D23" },
+        },
+      },
+      {
+        id: "alert-2",
+        type: "Contato",
+        severity: "info",
+        message: "Novo alerta pendente",
+        read: false,
+        created_at: "2026-04-22T10:05:00.000Z",
+        devices: {
+          imei: "123456789012346",
+          vehicles: { plate: "XYZ9K88" },
+        },
+      },
+    ];
+
+    getUnreadAlertCount.mockResolvedValue(1);
+    getAlerts.mockResolvedValue(alerts);
+    alertBellMenuMock.mockReturnValue(null);
+
+    const tree = await AlertBell();
+    render(tree);
+
+    expect(alertBellMenuMock).toHaveBeenCalledTimes(1);
+    expect(alertBellMenuMock.mock.calls[0]?.[0]).toEqual({
+      initialUnreadCount: 2,
+      initialAlerts: alerts,
+      hasLoadError: false,
+    });
+  });
 });
