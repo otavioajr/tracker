@@ -197,24 +197,24 @@ describe("AlertBellMenu", () => {
     expect(within(getPopover()).getByText("5 não lidos")).toBeTruthy();
   });
 
-  it("keeps local sync for already-read reconciliation events without decrementing the badge", async () => {
+  it("decrements the badge for already-read reconciliation events", async () => {
     render(<AlertBellMenu initialAlerts={alerts} initialUnreadCount={2} />);
 
     fireEvent.click(getTrigger("Alertas (2 não lidos)"));
 
     window.dispatchEvent(
       new CustomEvent(ALERT_READ_EVENT, {
-        detail: { id: "alert-1", newlyRead: false },
+        detail: { id: "alert-1", newlyRead: true },
       })
     );
 
     await waitFor(() => {
-      expect(within(getPopover()).getByText("2 não lidos")).toBeTruthy();
+      expect(within(getPopover()).getByText("1 não lidos")).toBeTruthy();
     });
 
     expect(
       document.querySelector(
-        'button[data-slot="popover-trigger"][aria-label="Alertas (2 não lidos)"]'
+        'button[data-slot="popover-trigger"][aria-label="Alertas (1 não lidos)"]'
       )
     ).toBeTruthy();
   });

@@ -121,6 +121,8 @@ export function AlertFeed({
   }, []);
 
   async function handleMarkRead(id: string) {
+    const wasUnread = items.some((item) => item.id === id && !item.read);
+
     setMarking(id);
 
     try {
@@ -129,13 +131,12 @@ export function AlertFeed({
         return;
       }
 
-      const newlyRead = !result?.alreadyRead;
-
       setItems((current) =>
         current.map((item) => (item.id === id ? { ...item, read: true } : item))
       );
-      dispatchAlertReadEvent({ id, newlyRead });
-      if (newlyRead) {
+
+      if (wasUnread) {
+        dispatchAlertReadEvent({ id, newlyRead: true });
         onAlertRead?.(id);
       }
     } catch {

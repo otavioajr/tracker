@@ -131,13 +131,13 @@ describe("AlertFeed", () => {
 
     await waitFor(() => expect(markAlertRead).toHaveBeenCalledWith("alert-1"));
     await waitFor(() => expect(listener).toHaveBeenCalledTimes(1));
-    await waitFor(() => expect(onAlertRead).not.toHaveBeenCalled());
+    await waitFor(() => expect(onAlertRead).toHaveBeenCalledWith("alert-1"));
 
     const event = listener.mock.calls[0]?.[0] as CustomEvent<{
       id: string;
       newlyRead: boolean;
     }>;
-    expect(event.detail).toEqual({ id: "alert-1", newlyRead: false });
+    expect(event.detail).toEqual({ id: "alert-1", newlyRead: true });
     expect(screen.queryByRole("button", { name: /marcar alerta como lido/i })).toBeNull();
 
     window.removeEventListener(ALERT_READ_EVENT, listener as EventListener);
