@@ -43,7 +43,7 @@ afterEach(() => {
 
 describe("AlertFeed", () => {
   it("uses the default page variant and updates locally on success", async () => {
-    markAlertRead.mockResolvedValueOnce(undefined);
+    markAlertRead.mockResolvedValueOnce({ success: true });
     const onAlertRead = vi.fn();
 
     render(<AlertFeed alerts={alerts} onAlertRead={onAlertRead} />);
