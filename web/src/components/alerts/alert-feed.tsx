@@ -3,14 +3,15 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
 import { markAlertRead } from "@/lib/actions/alerts";
-import { AlertTriangle, Check, Info, Zap } from "lucide-react";
-import { useState } from "react";
+import { AlertTriangle, Eye, Info, Zap } from "lucide-react";
+import { useEffect, useState } from "react";
 
 type Vehicle = { plate: string } | null;
 type Device = { imei: string; vehicles: Vehicle | Vehicle[] | null } | null;
 
-type Alert = {
+export type AlertFeedAlert = {
   id: string;
   type: string;
   severity: string;
@@ -18,6 +19,12 @@ type Alert = {
   read: boolean;
   created_at: string;
   devices: Device | Device[] | null;
+};
+
+type AlertFeedProps = {
+  alerts: AlertFeedAlert[];
+  variant?: "page" | "dropdown";
+  onAlertRead?: (id: string) => void;
 };
 
 function getSeverityIcon(severity: string) {
@@ -65,44 +72,87 @@ function formatDate(dateStr: string): string {
   }).format(new Date(dateStr));
 }
 
-export function AlertFeed({ alerts }: { alerts: Alert[] }) {
+export function AlertFeed({
+  alerts,
+  variant = "page",
+  onAlertRead,
+}: AlertFeedProps) {
+  const [items, setItems] = useState(alerts);
   const [marking, setMarking] = useState<string | null>(null);
+
+  useEffect(() => {
+    setItems(alerts);
+  }, [alerts]);
 
   async function handleMarkRead(id: string) {
     setMarking(id);
-    await markAlertRead(id);
-    setMarking(null);
+
+    try {
+      const result = await markAlertRead(id);
+      if (result && "error" in result) {
+        return;
+      }
+
+      setItems((current) =>
+        current.map((item) => (item.id === id ? { ...item, read: true } : item))
+      );
+      onAlertRead?.(id);
+    } catch {
+      return;
+    } finally {
+      setMarking(null);
+    }
   }
 
-  if (alerts.length === 0) {
+  if (items.length === 0) {
     return (
-      <p className="text-muted-foreground text-sm py-8 text-center">
+      <p className="py-8 text-center text-sm text-muted-foreground">
         Nenhum alerta encontrado.
       </p>
     );
   }
 
+  const isDropdown = variant === "dropdown";
+
   return (
-    <div className="space-y-3">
-      {alerts.map((alert) => (
+    <div className={cn(isDropdown ? "space-y-2" : "space-y-3")}>
+      {items.map((alert) => (
         <Card
           key={alert.id}
-          className={alert.read ? "" : "bg-accent/50"}
+          size={isDropdown ? "sm" : "default"}
+          className={cn(!alert.read && "bg-accent/50")}
         >
-          <CardContent className="flex items-start gap-3 py-4">
+          <CardContent
+            className={cn(
+              "flex items-start gap-3",
+              isDropdown ? "py-3" : "py-4"
+            )}
+          >
             <div className="mt-0.5">{getSeverityIcon(alert.severity)}</div>
 
-            <div className="flex-1 min-w-0">
-              <div className="flex flex-wrap items-center gap-2 mb-1">
+            <div className="min-w-0 flex-1">
+              <div className="mb-1 flex flex-wrap items-center gap-2">
                 <Badge variant={getSeverityVariant(alert.severity)}>
                   {alert.type}
                 </Badge>
-                <span className="text-sm font-medium">
+                <span
+                  className={cn(
+                    "font-medium",
+                    isDropdown ? "text-[13px]" : "text-sm"
+                  )}
+                >
                   {getVehicleLabel(alert.devices)}
                 </span>
               </div>
-              <p className="text-sm text-muted-foreground">{alert.message}</p>
-              <p className="text-xs text-muted-foreground mt-1">
+              <p
+                className={cn(
+                  "text-muted-foreground",
+                  isDropdown ? "text-[13px]" : "text-sm"
+                )}
+              >
+                {alert.message}
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">
                 {formatDate(alert.created_at)}
               </p>
             </div>
@@ -113,9 +163,10 @@ export function AlertFeed({ alerts }: { alerts: Alert[] }) {
                 size="sm"
                 disabled={marking === alert.id}
                 onClick={() => handleMarkRead(alert.id)}
-                title="Marcar como lido"
+                aria-label="Marcar alerta como lido"
+                title="Marcar alerta como lido"
               >
-                <Check size={14} />
+                <Eye size={14} />
               </Button>
             )}
           </CardContent>
