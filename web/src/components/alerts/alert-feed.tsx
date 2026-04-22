@@ -8,6 +8,8 @@ import { markAlertRead } from "@/lib/actions/alerts";
 import { AlertTriangle, Eye, Info, Zap } from "lucide-react";
 import { useEffect, useState } from "react";
 
+export const ALERT_READ_EVENT = "tracker:alert-read";
+
 type Vehicle = { plate: string } | null;
 type Device = { imei: string; vehicles: Vehicle | Vehicle[] | null } | null;
 
@@ -96,7 +98,15 @@ export function AlertFeed({
       setItems((current) =>
         current.map((item) => (item.id === id ? { ...item, read: true } : item))
       );
-      onAlertRead?.(id);
+      if (onAlertRead) {
+        onAlertRead(id);
+      } else if (typeof window !== "undefined") {
+        window.dispatchEvent(
+          new CustomEvent<{ id: string }>(ALERT_READ_EVENT, {
+            detail: { id },
+          })
+        );
+      }
     } catch {
       return;
     } finally {

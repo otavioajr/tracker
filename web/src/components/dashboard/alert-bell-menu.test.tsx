@@ -3,11 +3,15 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
-import type { AlertFeedAlert } from "@/components/alerts/alert-feed";
+import {
+  ALERT_READ_EVENT,
+  type AlertFeedAlert,
+} from "@/components/alerts/alert-feed";
 
 import { AlertBellMenu } from "./alert-bell-menu";
 
 vi.mock("@/components/alerts/alert-feed", () => ({
+  ALERT_READ_EVENT: "tracker:alert-read",
   AlertFeed: AlertFeedMock,
 }));
 
@@ -109,6 +113,28 @@ describe("AlertBellMenu", () => {
         )
       ).toBeTruthy();
     });
+  });
+
+  it("decrements the badge when another alert feed dispatches a read event", async () => {
+    render(<AlertBellMenu initialAlerts={alerts} initialUnreadCount={2} />);
+
+    fireEvent.click(getTrigger("Alertas (2 não lidos)"));
+
+    window.dispatchEvent(
+      new CustomEvent(ALERT_READ_EVENT, {
+        detail: { id: "alert-99" },
+      })
+    );
+
+    await waitFor(() => {
+      expect(
+        document.querySelector(
+          'button[data-slot="dropdown-menu-trigger"][aria-label="Alertas (1 não lidos)"]'
+        )
+      ).toBeTruthy();
+    });
+
+    expect(within(getMenu()).getByText("1 não lidos")).toBeTruthy();
   });
 
   it("resyncs badge and subtitle when the server unread count prop changes", async () => {

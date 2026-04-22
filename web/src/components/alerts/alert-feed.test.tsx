@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { AlertFeed, type AlertFeedAlert } from "./alert-feed";
+import { ALERT_READ_EVENT, AlertFeed, type AlertFeedAlert } from "./alert-feed";
 
 const markAlertRead = vi.hoisted(() => vi.fn());
 
@@ -54,6 +54,26 @@ describe("AlertFeed", () => {
     await waitFor(() => expect(markAlertRead).toHaveBeenCalledWith("alert-1"));
     await waitFor(() => expect(onAlertRead).toHaveBeenCalledWith("alert-1"));
     expect(screen.queryByRole("button", { name: /marcar alerta como lido/i })).toBeNull();
+  });
+
+  it("dispatches a browser event when a page feed marks an alert as read without a callback", async () => {
+    markAlertRead.mockResolvedValueOnce({ success: true });
+    const listener = vi.fn();
+
+    window.addEventListener(ALERT_READ_EVENT, listener as EventListener);
+
+    render(<AlertFeed alerts={alerts} variant="page" />);
+
+    fireEvent.click(screen.getByRole("button", { name: /marcar alerta como lido/i }));
+
+    await waitFor(() => expect(markAlertRead).toHaveBeenCalledWith("alert-1"));
+    await waitFor(() => expect(listener).toHaveBeenCalledTimes(1));
+
+    const event = listener.mock.calls[0]?.[0] as CustomEvent<{ id: string }>;
+    expect(event.detail).toEqual({ id: "alert-1" });
+    expect(screen.queryByRole("button", { name: /marcar alerta como lido/i })).toBeNull();
+
+    window.removeEventListener(ALERT_READ_EVENT, listener as EventListener);
   });
 
   it("keeps the unread alert actionable when the action resolves with an error", async () => {

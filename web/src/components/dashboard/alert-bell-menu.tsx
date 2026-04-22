@@ -4,7 +4,11 @@ import Link from "next/link";
 import { Bell } from "lucide-react";
 import { useEffect, useState } from "react";
 
-import { AlertFeed, type AlertFeedAlert } from "@/components/alerts/alert-feed";
+import {
+  ALERT_READ_EVENT,
+  AlertFeed,
+  type AlertFeedAlert,
+} from "@/components/alerts/alert-feed";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -27,6 +31,18 @@ export function AlertBellMenu({
   useEffect(() => {
     setUnreadCount(initialUnreadCount);
   }, [initialUnreadCount]);
+
+  useEffect(() => {
+    function handleExternalAlertRead() {
+      setUnreadCount((current) => Math.max(0, current - 1));
+    }
+
+    window.addEventListener(ALERT_READ_EVENT, handleExternalAlertRead);
+
+    return () => {
+      window.removeEventListener(ALERT_READ_EVENT, handleExternalAlertRead);
+    };
+  }, []);
 
   const triggerLabel =
     unreadCount === 0
