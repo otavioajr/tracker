@@ -73,7 +73,7 @@ Key directories:
 
 UI stack: Tailwind CSS v4, Shadcn UI (base-nova), next-themes for dark mode, Leaflet/react-leaflet for maps.
 
-**Leaflet z-index gotcha:** Leaflet map panes/controls sit at z-index 400–1000. Any modal, dropdown, toast, popover, or dialog that can open over a map needs `z-index > 1000` or it will render *under* the map. `src/components/ui/dialog.tsx` uses `z-[1100]` for both overlay and content for exactly this reason. When adding new overlay primitives (command palette, sheet, hover card, etc.), bump their z-index above 1000 before they ship — do not wait for the bug to surface.
+**Leaflet z-index gotcha:** Leaflet map panes/controls sit at z-index 400–1000. Any modal, dropdown, toast, popover, or dialog that can open over a map needs `z-index > 1000` or it will render *under* the map. Current layering: Dialog (`dialog.tsx`) = `z-[1100]`, Select popover (`select.tsx`) = `z-[1200]` (precisa abrir sobre Dialog). When adding new overlay primitives (command palette, sheet, hover card, combobox), pick z-index > 1000 and keep Select/Menu above Dialog.
 
 **Server vs client components for button styles:** `buttonVariants` lives in `src/components/ui/button-variants.ts` (no `"use client"`). The `Button` component in `button.tsx` is a client component and re-exports `buttonVariants`, but server components must import from `./button-variants` directly to avoid "client function called from server" errors.
 
