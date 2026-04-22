@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { AlertFeed } from "./alert-feed";
+import { AlertFeed, type AlertFeedAlert } from "./alert-feed";
 
 const markAlertRead = vi.hoisted(() => vi.fn());
 
@@ -9,7 +9,7 @@ vi.mock("@/lib/actions/alerts", () => ({
   markAlertRead,
 }));
 
-const alerts = [
+const alerts: AlertFeedAlert[] = [
   {
     id: "alert-1",
     type: "speed",
@@ -34,7 +34,7 @@ const alerts = [
       vehicles: { plate: "XYZ9K88" },
     },
   },
-] as const;
+];
 
 afterEach(() => {
   cleanup();
@@ -42,11 +42,11 @@ afterEach(() => {
 });
 
 describe("AlertFeed", () => {
-  it("marks an unread alert as read in dropdown mode and updates locally", async () => {
+  it("uses the default page variant and updates locally on success", async () => {
     markAlertRead.mockResolvedValueOnce(undefined);
     const onAlertRead = vi.fn();
 
-    render(<AlertFeed alerts={alerts as unknown as typeof alerts} variant="dropdown" onAlertRead={onAlertRead} />);
+    render(<AlertFeed alerts={alerts} onAlertRead={onAlertRead} />);
 
     const markButton = screen.getByRole("button", { name: /marcar alerta como lido/i });
     fireEvent.click(markButton);
@@ -56,11 +56,24 @@ describe("AlertFeed", () => {
     expect(screen.queryByRole("button", { name: /marcar alerta como lido/i })).toBeNull();
   });
 
-  it("keeps the unread alert actionable when marking read fails", async () => {
+  it("keeps the unread alert actionable when the action resolves with an error", async () => {
+    markAlertRead.mockResolvedValueOnce({ error: "boom" });
+    const onAlertRead = vi.fn();
+
+    render(<AlertFeed alerts={alerts} variant="dropdown" onAlertRead={onAlertRead} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /marcar alerta como lido/i }));
+
+    await waitFor(() => expect(markAlertRead).toHaveBeenCalledWith("alert-1"));
+    await waitFor(() => expect(onAlertRead).not.toHaveBeenCalled());
+    expect(screen.getByRole("button", { name: /marcar alerta como lido/i })).toBeTruthy();
+  });
+
+  it("keeps the unread alert actionable when marking read rejects", async () => {
     markAlertRead.mockRejectedValueOnce(new Error("boom"));
     const onAlertRead = vi.fn();
 
-    render(<AlertFeed alerts={alerts as unknown as typeof alerts} variant="dropdown" onAlertRead={onAlertRead} />);
+    render(<AlertFeed alerts={alerts} variant="dropdown" onAlertRead={onAlertRead} />);
 
     fireEvent.click(screen.getByRole("button", { name: /marcar alerta como lido/i }));
 
