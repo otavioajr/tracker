@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { Bell } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import {
   ALERT_READ_EVENT,
@@ -27,14 +27,24 @@ export function AlertBellMenu({
   hasLoadError = false,
 }: AlertBellMenuProps) {
   const [unreadCount, setUnreadCount] = useState(initialUnreadCount);
+  const processedReadIdsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     setUnreadCount(initialUnreadCount);
   }, [initialUnreadCount]);
 
   useEffect(() => {
-    function handleExternalAlertRead() {
+    function applyReadEvent(id?: string) {
+      if (!id || processedReadIdsRef.current.has(id)) return;
+
+      processedReadIdsRef.current.add(id);
       setUnreadCount((current) => Math.max(0, current - 1));
+    }
+
+    function handleExternalAlertRead(event: Event) {
+      const { detail } = event as CustomEvent<{ id?: string }>;
+
+      applyReadEvent(detail?.id);
     }
 
     window.addEventListener(ALERT_READ_EVENT, handleExternalAlertRead);
@@ -52,7 +62,10 @@ export function AlertBellMenu({
   const subtitle =
     unreadCount > 0 ? `${unreadCount} não lidos` : "Nenhum novo alerta";
 
-  function handleAlertRead() {
+  function handleAlertRead(id: string) {
+    if (processedReadIdsRef.current.has(id)) return;
+
+    processedReadIdsRef.current.add(id);
     setUnreadCount((current) => Math.max(0, current - 1));
   }
 

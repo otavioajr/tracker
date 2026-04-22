@@ -76,6 +76,32 @@ describe("AlertFeed", () => {
     window.removeEventListener(ALERT_READ_EVENT, listener as EventListener);
   });
 
+  it("syncs another visible feed when one feed marks an alert as read", async () => {
+    markAlertRead.mockResolvedValueOnce({ success: true });
+
+    render(
+      <>
+        <AlertFeed alerts={alerts} variant="page" />
+        <AlertFeed alerts={alerts} variant="dropdown" />
+      </>
+    );
+
+    expect(
+      screen.getAllByRole("button", { name: /marcar alerta como lido/i })
+    ).toHaveLength(2);
+
+    fireEvent.click(
+      screen.getAllByRole("button", { name: /marcar alerta como lido/i })[0]
+    );
+
+    await waitFor(() => expect(markAlertRead).toHaveBeenCalledWith("alert-1"));
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("button", { name: /marcar alerta como lido/i })
+      ).toBeNull()
+    );
+  });
+
   it("keeps the unread alert actionable when the action resolves with an error", async () => {
     markAlertRead.mockResolvedValueOnce({ error: "boom" });
     const onAlertRead = vi.fn();

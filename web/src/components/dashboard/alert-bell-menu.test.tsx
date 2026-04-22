@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   ALERT_READ_EVENT,
@@ -32,7 +32,14 @@ function AlertFeedMock({
             <button
               type="button"
               aria-label="Marcar alerta como lido"
-              onClick={() => onAlertRead?.(alert.id)}
+              onClick={() => {
+                onAlertRead?.(alert.id);
+                window.dispatchEvent(
+                  new CustomEvent(ALERT_READ_EVENT, {
+                    detail: { id: alert.id },
+                  })
+                );
+              }}
             >
               Marcar alerta como lido
             </button>
@@ -57,6 +64,10 @@ const alerts: AlertFeedAlert[] = [
     },
   },
 ];
+
+afterEach(() => {
+  cleanup();
+});
 
 function getTrigger(label: string) {
   const trigger = document.querySelector<HTMLButtonElement>(
@@ -123,6 +134,33 @@ describe("AlertBellMenu", () => {
     window.dispatchEvent(
       new CustomEvent(ALERT_READ_EVENT, {
         detail: { id: "alert-99" },
+      })
+    );
+
+    await waitFor(() => {
+      expect(
+        document.querySelector(
+          'button[data-slot="dropdown-menu-trigger"][aria-label="Alertas (1 não lidos)"]'
+        )
+      ).toBeTruthy();
+    });
+
+    expect(within(getMenu()).getByText("1 não lidos")).toBeTruthy();
+  });
+
+  it("does not decrement the badge twice for repeated same-id read events", async () => {
+    render(<AlertBellMenu initialAlerts={alerts} initialUnreadCount={2} />);
+
+    fireEvent.click(getTrigger("Alertas (2 não lidos)"));
+
+    window.dispatchEvent(
+      new CustomEvent(ALERT_READ_EVENT, {
+        detail: { id: "alert-1" },
+      })
+    );
+    window.dispatchEvent(
+      new CustomEvent(ALERT_READ_EVENT, {
+        detail: { id: "alert-1" },
       })
     );
 

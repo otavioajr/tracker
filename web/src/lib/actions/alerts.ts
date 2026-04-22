@@ -28,12 +28,16 @@ export async function getAlerts(limit = 50) {
 
 export async function markAlertRead(id: string) {
   const supabase = await createClient();
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("alerts")
     .update({ read: true })
-    .eq("id", id);
+    .eq("id", id)
+    .eq("read", false)
+    .select("id")
+    .maybeSingle();
 
   if (error) return { error: error.message };
+  if (!data) return { error: "Alert already read or not found." };
   revalidatePath("/alerts");
   return { success: true };
 }
