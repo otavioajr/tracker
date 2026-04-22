@@ -1,0 +1,85 @@
+"use client";
+
+import Link from "next/link";
+import { Bell } from "lucide-react";
+import { useState } from "react";
+
+import { AlertFeed, type AlertFeedAlert } from "@/components/alerts/alert-feed";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+
+type AlertBellMenuProps = {
+  initialAlerts: AlertFeedAlert[];
+  initialUnreadCount: number;
+  hasLoadError?: boolean;
+};
+
+export function AlertBellMenu({
+  initialAlerts,
+  initialUnreadCount,
+  hasLoadError = false,
+}: AlertBellMenuProps) {
+  const [unreadCount, setUnreadCount] = useState(initialUnreadCount);
+
+  const triggerLabel =
+    unreadCount === 0
+      ? "Alertas"
+      : `Alertas (${unreadCount} não lidos)`;
+  const badgeLabel = unreadCount > 99 ? "99+" : String(unreadCount);
+  const subtitle =
+    unreadCount > 0 ? `${unreadCount} não lidos` : "Nenhum novo alerta";
+
+  function handleAlertRead() {
+    setUnreadCount((current) => Math.max(0, current - 1));
+  }
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        aria-label={triggerLabel}
+        className="relative inline-flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+      >
+        <Bell className="h-4 w-4" />
+        {unreadCount > 0 ? (
+          <span className="absolute -right-0.5 -top-0.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold text-destructive-foreground">
+            {badgeLabel}
+          </span>
+        ) : null}
+      </DropdownMenuTrigger>
+
+      <DropdownMenuContent
+        align="end"
+        sideOffset={8}
+        className="w-[min(24rem,calc(100vw-1rem))] rounded-xl p-0"
+      >
+        <div className="border-b px-4 py-3">
+          <div className="text-sm font-semibold text-foreground">Alertas</div>
+          <div className="text-xs text-muted-foreground">{subtitle}</div>
+        </div>
+
+        <div className="max-h-96 overflow-y-auto px-2 py-2">
+          {hasLoadError ? (
+            <p className="py-8 text-center text-sm text-muted-foreground">
+              Não foi possível carregar os alertas.
+            </p>
+          ) : (
+            <AlertFeed
+              alerts={initialAlerts}
+              variant="dropdown"
+              onAlertRead={handleAlertRead}
+            />
+          )}
+        </div>
+
+        <div className="border-t px-4 py-3">
+          <Link href="/alerts" className="text-sm font-medium text-primary transition-colors hover:underline">
+            Ver todos
+          </Link>
+        </div>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
