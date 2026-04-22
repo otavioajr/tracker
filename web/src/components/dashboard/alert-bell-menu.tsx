@@ -10,10 +10,10 @@ import {
   type AlertFeedAlert,
 } from "@/components/alerts/alert-feed";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 
 type AlertBellMenuProps = {
   initialAlerts: AlertFeedAlert[];
@@ -70,8 +70,8 @@ export function AlertBellMenu({
   }
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger
+    <Popover>
+      <PopoverTrigger
         aria-label={triggerLabel}
         className="relative inline-flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
       >
@@ -81,9 +81,9 @@ export function AlertBellMenu({
             {badgeLabel}
           </span>
         ) : null}
-      </DropdownMenuTrigger>
+      </PopoverTrigger>
 
-      <DropdownMenuContent
+      <PopoverContent
         align="end"
         sideOffset={8}
         positionerClassName="z-[1100]"
@@ -113,7 +113,7 @@ export function AlertBellMenu({
             Ver todos
           </Link>
         </div>
-      </DropdownMenuContent>
-    </DropdownMenu>
+      </PopoverContent>
+    </Popover>
   );
 }

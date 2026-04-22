@@ -71,19 +71,21 @@ afterEach(() => {
 
 function getTrigger(label: string) {
   const trigger = document.querySelector<HTMLButtonElement>(
-    `button[data-slot="dropdown-menu-trigger"][aria-label="${label}"][aria-expanded="false"]`
+    `button[data-slot="popover-trigger"][aria-label="${label}"][aria-expanded="false"]`
   );
 
   expect(trigger).toBeTruthy();
   return trigger as HTMLButtonElement;
 }
 
-function getMenu() {
-  const menus = document.querySelectorAll<HTMLElement>('[role="menu"]');
-  const menu = menus.item(menus.length - 1);
+function getPopover() {
+  const popovers = document.querySelectorAll<HTMLElement>(
+    '[data-slot="popover-content"]'
+  );
+  const popover = popovers.item(popovers.length - 1);
 
-  expect(menu).toBeTruthy();
-  return menu as HTMLElement;
+  expect(popover).toBeTruthy();
+  return popover as HTMLElement;
 }
 
 describe("AlertBellMenu", () => {
@@ -96,7 +98,7 @@ describe("AlertBellMenu", () => {
     expect(screen.getByText("2 não lidos")).toBeTruthy();
     expect(screen.getByText("Excesso de velocidade detectado")).toBeTruthy();
 
-    const link = within(getMenu()).getByRole("link", {
+    const link = within(getPopover()).getByRole("link", {
       name: "Ver todos",
     });
     expect(link.getAttribute("href")).toBe("/alerts");
@@ -108,11 +110,11 @@ describe("AlertBellMenu", () => {
     fireEvent.click(getTrigger("Alertas (2 não lidos)"));
 
     await waitFor(() => {
-      expect(within(getMenu()).getByText("Excesso de velocidade detectado")).toBeTruthy();
+      expect(within(getPopover()).getByText("Excesso de velocidade detectado")).toBeTruthy();
     });
 
     fireEvent.click(
-      within(getMenu()).getByRole("button", {
+      within(getPopover()).getByRole("button", {
         name: "Marcar alerta como lido",
       })
     );
@@ -120,7 +122,7 @@ describe("AlertBellMenu", () => {
     await waitFor(() => {
       expect(
         document.querySelector(
-          'button[data-slot="dropdown-menu-trigger"][aria-label="Alertas (1 não lidos)"]'
+          'button[data-slot="popover-trigger"][aria-label="Alertas (1 não lidos)"]'
         )
       ).toBeTruthy();
     });
@@ -140,12 +142,12 @@ describe("AlertBellMenu", () => {
     await waitFor(() => {
       expect(
         document.querySelector(
-          'button[data-slot="dropdown-menu-trigger"][aria-label="Alertas (1 não lidos)"]'
+          'button[data-slot="popover-trigger"][aria-label="Alertas (1 não lidos)"]'
         )
       ).toBeTruthy();
     });
 
-    expect(within(getMenu()).getByText("1 não lidos")).toBeTruthy();
+    expect(within(getPopover()).getByText("1 não lidos")).toBeTruthy();
   });
 
   it("does not decrement the badge twice for repeated same-id read events", async () => {
@@ -167,12 +169,12 @@ describe("AlertBellMenu", () => {
     await waitFor(() => {
       expect(
         document.querySelector(
-          'button[data-slot="dropdown-menu-trigger"][aria-label="Alertas (1 não lidos)"]'
+          'button[data-slot="popover-trigger"][aria-label="Alertas (1 não lidos)"]'
         )
       ).toBeTruthy();
     });
 
-    expect(within(getMenu()).getByText("1 não lidos")).toBeTruthy();
+    expect(within(getPopover()).getByText("1 não lidos")).toBeTruthy();
   });
 
   it("resyncs badge and subtitle when the server unread count prop changes", async () => {
@@ -187,26 +189,30 @@ describe("AlertBellMenu", () => {
     await waitFor(() => {
       expect(
         document.querySelector(
-          'button[data-slot="dropdown-menu-trigger"][aria-label="Alertas (5 não lidos)"]'
+          'button[data-slot="popover-trigger"][aria-label="Alertas (5 não lidos)"]'
         )
       ).toBeTruthy();
     });
 
-    expect(within(getMenu()).getByText("5 não lidos")).toBeTruthy();
+    expect(within(getPopover()).getByText("5 não lidos")).toBeTruthy();
   });
 
-  it("applies the Leaflet-safe z-index on the shared dropdown positioner", async () => {
+  it("applies the Leaflet-safe z-index on the shared popover positioner", async () => {
     render(<AlertBellMenu initialAlerts={alerts} initialUnreadCount={2} />);
 
     fireEvent.click(getTrigger("Alertas (2 não lidos)"));
 
-    const menus = await screen.findAllByRole("menu");
-    const menu = menus.find((candidate) =>
+    await screen.findByText("2 não lidos");
+
+    const popovers = document.querySelectorAll<HTMLElement>(
+      '[data-slot="popover-content"]'
+    );
+    const popover = Array.from(popovers).find((candidate) =>
       candidate.textContent?.includes("2 não lidos")
     );
-    const positioner = menu.parentElement;
+    const positioner = popover?.parentElement;
 
-    expect(menu).toBeTruthy();
+    expect(popover).toBeTruthy();
     expect(positioner).toBeTruthy();
     expect(positioner?.className).toContain("z-[1100]");
   });
@@ -224,7 +230,7 @@ describe("AlertBellMenu", () => {
 
     expect(await screen.findByText("Não foi possível carregar os alertas.")).toBeTruthy();
 
-    const link = within(getMenu()).getByRole("link", {
+    const link = within(getPopover()).getByRole("link", {
       name: "Ver todos",
     });
     expect(link.getAttribute("href")).toBe("/alerts");
