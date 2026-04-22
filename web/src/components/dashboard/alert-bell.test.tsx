@@ -52,14 +52,12 @@ describe("AlertBell", () => {
 
     expect(getUnreadAlertCount).toHaveBeenCalledTimes(1);
     expect(getAlerts).toHaveBeenCalledWith(10);
-    expect(alertBellMenuMock).toHaveBeenCalledWith(
-      {
-        initialUnreadCount: 3,
-        initialAlerts: alerts,
-        hasLoadError: false,
-      },
-      undefined
-    );
+    expect(alertBellMenuMock).toHaveBeenCalledTimes(1);
+    expect(alertBellMenuMock.mock.calls[0]?.[0]).toEqual({
+      initialUnreadCount: 3,
+      initialAlerts: alerts,
+      hasLoadError: false,
+    });
   });
 
   it("falls back to empty alerts and error state when recent alerts fail", async () => {
@@ -70,13 +68,54 @@ describe("AlertBell", () => {
     const tree = await AlertBell();
     render(tree);
 
-    expect(alertBellMenuMock).toHaveBeenCalledWith(
+    expect(alertBellMenuMock).toHaveBeenCalledTimes(1);
+    expect(alertBellMenuMock.mock.calls[0]?.[0]).toEqual({
+      initialUnreadCount: 2,
+      initialAlerts: [],
+      hasLoadError: true,
+    });
+  });
+
+  it("derives unread count from loaded alerts when the count query fails", async () => {
+    const alerts: AlertFeedAlert[] = [
       {
-        initialUnreadCount: 2,
-        initialAlerts: [],
-        hasLoadError: true,
+        id: "alert-1",
+        type: "Velocidade",
+        severity: "warning",
+        message: "Excesso de velocidade detectado",
+        read: false,
+        created_at: "2026-04-22T10:00:00.000Z",
+        devices: {
+          imei: "123456789012345",
+          vehicles: { plate: "ABC1D23" },
+        },
       },
-      undefined
-    );
+      {
+        id: "alert-2",
+        type: "Contato",
+        severity: "info",
+        message: "Novo alerta lido",
+        read: true,
+        created_at: "2026-04-22T10:05:00.000Z",
+        devices: {
+          imei: "123456789012345",
+          vehicles: { plate: "ABC1D23" },
+        },
+      },
+    ];
+
+    getUnreadAlertCount.mockRejectedValue(new Error("boom"));
+    getAlerts.mockResolvedValue(alerts);
+    alertBellMenuMock.mockReturnValue(null);
+
+    const tree = await AlertBell();
+    render(tree);
+
+    expect(alertBellMenuMock).toHaveBeenCalledTimes(1);
+    expect(alertBellMenuMock.mock.calls[0]?.[0]).toEqual({
+      initialUnreadCount: 1,
+      initialAlerts: alerts,
+      hasLoadError: false,
+    });
   });
 });

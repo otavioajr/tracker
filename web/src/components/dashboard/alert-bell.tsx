@@ -10,10 +10,12 @@ export async function AlertBell() {
     getAlerts(RECENT_ALERTS_LIMIT),
   ]);
 
-  const initialUnreadCount =
-    countResult.status === "fulfilled" ? countResult.value : 0;
   const initialAlerts =
     alertsResult.status === "fulfilled" ? alertsResult.value : [];
+  const initialUnreadCount =
+    countResult.status === "fulfilled"
+      ? countResult.value
+      : initialAlerts.filter((alert) => !alert.read).length;
   const hasLoadError = alertsResult.status === "rejected";
 
   return (
