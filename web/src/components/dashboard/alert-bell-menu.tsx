@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { Bell } from "lucide-react";
-import { useEffect, useReducer, useRef } from "react";
+import { useEffect, useReducer, useRef, useState } from "react";
 
 import {
   ALERT_READ_EVENT,
@@ -84,6 +84,7 @@ export function AlertBellMenu({
     alerts: initialAlerts,
     unreadCount: initialUnreadCount,
   });
+  const [open, setOpen] = useState(false);
   const processedReadIdsRef = useRef<Set<string>>(
     new Set(
       initialAlerts.filter((alert) => alert.read).map((alert) => alert.id)
@@ -151,7 +152,7 @@ export function AlertBellMenu({
   }
 
   return (
-    <Popover>
+    <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger
         aria-label={triggerLabel}
         className="relative inline-flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
@@ -190,7 +191,13 @@ export function AlertBellMenu({
         </div>
 
         <div className="border-t px-4 py-3">
-          <Link href="/alerts" className="text-sm font-medium text-primary transition-colors hover:underline">
+          <Link
+            href="/alerts"
+            className="text-sm font-medium text-primary transition-colors hover:underline"
+            onClick={() => {
+              setOpen(false);
+            }}
+          >
             Ver todos
           </Link>
         </div>

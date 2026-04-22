@@ -117,6 +117,34 @@ describe("AlertBellMenu", () => {
     expect(link.getAttribute("href")).toBe("/alerts");
   });
 
+  it("closes the dropdown when navigating via Ver todos", async () => {
+    const alerts = buildAlerts();
+
+    render(<AlertBellMenu initialAlerts={alerts} initialUnreadCount={2} />);
+
+    fireEvent.click(getTrigger("Alertas (2 não lidos)"));
+
+    await waitFor(() => {
+      expect(
+        getTriggerAnyState("Alertas (2 não lidos)").getAttribute("aria-expanded")
+      ).toBe("true");
+    });
+
+    fireEvent.click(
+      within(getPopover()).getByRole("link", {
+        name: "Ver todos",
+      })
+    );
+
+    await waitFor(() => {
+      expect(
+        getTriggerAnyState("Alertas (2 não lidos)").getAttribute("aria-expanded")
+      ).toBe("false");
+    });
+
+    expect(document.querySelector('[data-slot="popover-content"]')).toBeNull();
+  });
+
   it("decrements the badge when one unread alert is marked as read", async () => {
     const alerts = buildAlerts();
 
