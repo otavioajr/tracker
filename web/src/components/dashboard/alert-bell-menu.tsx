@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { Bell } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useReducer, useRef } from "react";
 
 import {
   ALERT_READ_EVENT,
@@ -21,17 +21,37 @@ type AlertBellMenuProps = {
   hasLoadError?: boolean;
 };
 
+type UnreadCountAction =
+  | { type: "sync"; count: number }
+  | { type: "decrement" };
+
 export function AlertBellMenu({
   initialAlerts,
   initialUnreadCount,
   hasLoadError = false,
 }: AlertBellMenuProps) {
-  const [unreadCount, setUnreadCount] = useState(initialUnreadCount);
-  const processedReadIdsRef = useRef<Set<string>>(new Set());
+  const [unreadCount, dispatchUnreadCount] = useReducer(
+    (current: number, action: UnreadCountAction) => {
+      if (action.type === "sync") {
+        return action.count;
+      }
+
+      return Math.max(0, current - 1);
+    },
+    initialUnreadCount
+  );
+  const processedReadIdsRef = useRef<Set<string>>(
+    new Set(
+      initialAlerts.filter((alert) => alert.read).map((alert) => alert.id)
+    )
+  );
 
   useEffect(() => {
-    setUnreadCount(initialUnreadCount);
-  }, [initialUnreadCount]);
+    processedReadIdsRef.current = new Set(
+      initialAlerts.filter((alert) => alert.read).map((alert) => alert.id)
+    );
+    dispatchUnreadCount({ type: "sync", count: initialUnreadCount });
+  }, [initialAlerts, initialUnreadCount]);
 
   useEffect(() => {
     function applyReadEvent(id?: string, newlyRead?: boolean) {
@@ -40,7 +60,7 @@ export function AlertBellMenu({
       }
 
       processedReadIdsRef.current.add(id);
-      setUnreadCount((current) => Math.max(0, current - 1));
+      dispatchUnreadCount({ type: "decrement" });
     }
 
     function handleExternalAlertRead(event: Event) {
@@ -71,7 +91,7 @@ export function AlertBellMenu({
     if (processedReadIdsRef.current.has(id)) return;
 
     processedReadIdsRef.current.add(id);
-    setUnreadCount((current) => Math.max(0, current - 1));
+    dispatchUnreadCount({ type: "decrement" });
   }
 
   return (
