@@ -3,6 +3,17 @@
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 
+export async function getUnreadAlertCount() {
+  const supabase = await createClient();
+  const { count, error } = await supabase
+    .from("alerts")
+    .select("*", { count: "exact", head: true })
+    .eq("read", false);
+
+  if (error) throw new Error(error.message);
+  return count ?? 0;
+}
+
 export async function getAlerts(limit = 50) {
   const supabase = await createClient();
   const { data, error } = await supabase

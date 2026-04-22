@@ -64,7 +64,9 @@ function getTrigger(label: string) {
 }
 
 function getMenu() {
-  const menu = document.querySelector<HTMLElement>('[role="menu"]');
+  const menus = document.querySelectorAll<HTMLElement>('[role="menu"]');
+  const menu = menus.item(menus.length - 1);
+
   expect(menu).toBeTruthy();
   return menu as HTMLElement;
 }
@@ -107,6 +109,26 @@ describe("AlertBellMenu", () => {
         )
       ).toBeTruthy();
     });
+  });
+
+  it("resyncs badge and subtitle when the server unread count prop changes", async () => {
+    const { rerender } = render(
+      <AlertBellMenu initialAlerts={alerts} initialUnreadCount={2} />
+    );
+
+    fireEvent.click(getTrigger("Alertas (2 não lidos)"));
+
+    rerender(<AlertBellMenu initialAlerts={alerts} initialUnreadCount={5} />);
+
+    await waitFor(() => {
+      expect(
+        document.querySelector(
+          'button[data-slot="dropdown-menu-trigger"][aria-label="Alertas (5 não lidos)"]'
+        )
+      ).toBeTruthy();
+    });
+
+    expect(within(getMenu()).getByText("5 não lidos")).toBeTruthy();
   });
 
   it("applies the Leaflet-safe z-index on the shared dropdown positioner", async () => {

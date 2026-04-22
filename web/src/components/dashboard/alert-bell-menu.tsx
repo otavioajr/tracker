@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { Bell } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { AlertFeed, type AlertFeedAlert } from "@/components/alerts/alert-feed";
 import {
@@ -23,6 +23,10 @@ export function AlertBellMenu({
   hasLoadError = false,
 }: AlertBellMenuProps) {
   const [unreadCount, setUnreadCount] = useState(initialUnreadCount);
+
+  useEffect(() => {
+    setUnreadCount(initialUnreadCount);
+  }, [initialUnreadCount]);
 
   const triggerLabel =
     unreadCount === 0
