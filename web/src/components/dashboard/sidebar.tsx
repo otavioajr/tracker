@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { Car, Clock, Cpu, Map, MapPin, Bell, FileText, ChevronLeft, ChevronRight } from "lucide-react";
+import { Car, Clock, Cpu, Map, MapPin, FileText, ChevronLeft, ChevronRight } from "lucide-react";
 import { useState } from "react";
 
 const navItems = [
@@ -12,7 +12,6 @@ const navItems = [
   { href: "/vehicles", label: "Veiculos", icon: Car },
   { href: "/devices", label: "Dispositivos", icon: Cpu },
   { href: "/geofences", label: "Geocercas", icon: MapPin },
-  { href: "/alerts", label: "Alertas", icon: Bell },
   { href: "/reports", label: "Relatorios", icon: FileText },
 ];
 

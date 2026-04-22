@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { logout } from "@/lib/actions/auth";
 import { Button } from "@/components/ui/button";
 import { LogOut } from "lucide-react";
+import { AlertBell } from "./alert-bell";
 
 export async function Header() {
   const supabase = await createClient();
@@ -20,6 +21,7 @@ export async function Header() {
       </div>
       <div className="hidden lg:block" />
       <div className="flex items-center gap-3">
+        <AlertBell />
         <span className="hidden lg:inline text-sm text-muted-foreground">
           {user?.email}
         </span>

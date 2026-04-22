@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { Map, Car, Clock, Bell, MoreHorizontal } from "lucide-react";
+import { Map, Car, Clock, MoreHorizontal } from "lucide-react";
 import { useState } from "react";
 import { MobileMoreMenu } from "./mobile-more-menu";
 
@@ -11,7 +11,6 @@ const navItems = [
   { href: "/", label: "Mapa", icon: Map },
   { href: "/vehicles", label: "Frota", icon: Car },
   { href: "/history", label: "Histórico", icon: Clock },
-  { href: "/alerts", label: "Alertas", icon: Bell },
 ];
 
 export function MobileNav() {
