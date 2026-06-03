@@ -11,6 +11,7 @@ type Config struct {
 	TCPPort              int
 	DatabaseURL          string
 	MetricsPort          int
+	IdleTimeout          time.Duration
 	RuleSyncInterval     time.Duration
 	DeviceReloadInterval time.Duration
 	BufferCapacity       int
@@ -23,6 +24,7 @@ func Load() (*Config, error) {
 	cfg := &Config{
 		TCPPort:              5001,
 		MetricsPort:          9090,
+		IdleTimeout:          300 * time.Second,
 		RuleSyncInterval:     30 * time.Second,
 		DeviceReloadInterval: 5 * time.Second,
 		BufferCapacity:       10000,
@@ -50,6 +52,14 @@ func Load() (*Config, error) {
 			return nil, fmt.Errorf("invalid METRICS_PORT: %w", err)
 		}
 		cfg.MetricsPort = p
+	}
+
+	if timeout := os.Getenv("IDLE_TIMEOUT"); timeout != "" {
+		d, err := time.ParseDuration(timeout)
+		if err != nil {
+			return nil, fmt.Errorf("invalid IDLE_TIMEOUT: %w", err)
+		}
+		cfg.IdleTimeout = d
 	}
 
 	if interval := os.Getenv("RULE_SYNC_INTERVAL"); interval != "" {

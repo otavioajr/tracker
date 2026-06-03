@@ -66,6 +66,10 @@ type Server struct {
 	activeConn atomic.Int64
 	wg         sync.WaitGroup
 	quit       chan struct{}
+	stopOnce   sync.Once
+	connMu     sync.Mutex
+	conns      map[net.Conn]struct{}
+	closing    bool
 }
 
 // New creates a TCP server.
@@ -90,6 +94,7 @@ func New(cfg Config, registry *protocol.Registry, detector protocol.Detector, ha
 		handler:  handler,
 		logger:   cfg.Logger,
 		quit:     make(chan struct{}),
+		conns:    make(map[net.Conn]struct{}),
 	}
 }
 
@@ -122,17 +127,46 @@ func (s *Server) Start() error {
 	}
 }
 
-// Stop gracefully shuts down the server.
+// Stop gracefully shuts down the server. It is safe to call more than once.
 func (s *Server) Stop() {
-	close(s.quit)
-	s.mu.Lock()
-	ln := s.listener
-	s.listener = nil
-	s.mu.Unlock()
-	if ln != nil {
-		ln.Close()
+	s.stopOnce.Do(func() {
+		close(s.quit)
+		s.mu.Lock()
+		ln := s.listener
+		s.listener = nil
+		s.mu.Unlock()
+		if ln != nil {
+			ln.Close()
+		}
+		// Close active connections so their read loops unblock immediately,
+		// instead of waiting out the idle timeout.
+		s.connMu.Lock()
+		s.closing = true
+		for conn := range s.conns {
+			conn.Close()
+		}
+		s.connMu.Unlock()
+		s.wg.Wait()
+	})
+}
+
+// trackConn registers an active connection so Stop can close it during
+// shutdown. It returns false if the server is already shutting down, in which
+// case the caller should drop the connection.
+func (s *Server) trackConn(conn net.Conn) bool {
+	s.connMu.Lock()
+	defer s.connMu.Unlock()
+	if s.closing {
+		return false
 	}
-	s.wg.Wait()
+	s.conns[conn] = struct{}{}
+	return true
+}
+
+func (s *Server) untrackConn(conn net.Conn) {
+	s.connMu.Lock()
+	delete(s.conns, conn)
+	s.connMu.Unlock()
 }
 
 // Addr returns the server's listen address (useful for tests with port 0).
@@ -156,6 +190,11 @@ func (s *Server) handleConnection(conn net.Conn) {
 		s.activeConn.Add(-1)
 		s.wg.Done()
 	}()
+
+	if !s.trackConn(conn) {
+		return // server is shutting down
+	}
+	defer s.untrackConn(conn)
 
 	remoteAddr := conn.RemoteAddr().String()
 	s.logger.Debug("new connection", "remote", remoteAddr)

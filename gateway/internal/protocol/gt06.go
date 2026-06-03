@@ -21,6 +21,10 @@ const (
 
 	gt06StopHi = 0x0D
 	gt06StopLo = 0x0A
+
+	// sessionKeyIgnition stores the last-known ACC/ignition state (bool) parsed
+	// from a 0x13 status packet, applied to subsequent GPS positions.
+	sessionKeyIgnition = "ignition"
 )
 
 // GT06Parser decodes the Concox/GT06 binary protocol used by GF07, GT02,
@@ -150,11 +154,27 @@ func (p *GT06Parser) Parse(data []byte, session *Session) (*Position, error) {
 	case gt06ProtoGPS, gt06ProtoGPSLBS, gt06ProtoAlarm:
 		return p.parseGPS(content[1:], session)
 	case gt06ProtoHeartbeat:
-		return nil, nil
+		return p.parseStatus(content[1:], session)
 	default:
 		// Unknown protocol number — silently skip
 		return nil, nil
 	}
+}
+
+// parseStatus decodes a 0x13 status/heartbeat packet. It carries no position,
+// but its terminal-information byte holds the ACC (ignition) state in bit 1.
+// The state is remembered in the session and applied to later GPS packets,
+// because the J16 reports position (0x12) and ACC (0x13) in separate frames.
+func (p *GT06Parser) parseStatus(data []byte, session *Session) (*Position, error) {
+	if len(data) < 1 {
+		return nil, nil
+	}
+	if session.Data == nil {
+		session.Data = make(map[string]any)
+	}
+	// Terminal information byte: bit 1 (0x02) = ACC, 1 = on (ignition).
+	session.Data[sessionKeyIgnition] = data[0]&0x02 != 0
+	return nil, nil
 }
 
 func (p *GT06Parser) parseLogin(data []byte, session *Session) (*Position, error) {
@@ -219,14 +239,23 @@ func (p *GT06Parser) parseGPS(data []byte, session *Session) (*Position, error) 
 	courseWord := binary.BigEndian.Uint16(data[16:18])
 	heading := float64(courseWord & 0x03FF) // bits 0-9: course 0-360
 
-	// Bit 10: 0=east, 1=west → negate longitude
-	if courseWord&(1<<10) != 0 {
+	// Concox/GT06 hemisphere bits (standard convention used by GT06 devices):
+	//   bit 10 (0x0400): latitude  — 0 = south (negate), 1 = north
+	//   bit 11 (0x0800): longitude — 1 = west (negate),  0 = east
+	if courseWord&0x0400 == 0 {
+		lat = -lat
+	}
+	if courseWord&0x0800 != 0 {
 		lon = -lon
 	}
 
-	// Bit 11: 0=north, 1=south → negate latitude
-	if courseWord&(1<<11) != 0 {
-		lat = -lat
+	// Ignition (ACC) is not present in 0x12 GPS frames; use the last value
+	// learned from a 0x13 status packet (defaults to off until one arrives).
+	ignition := false
+	if session.Data != nil {
+		if v, ok := session.Data[sessionKeyIgnition].(bool); ok {
+			ignition = v
+		}
 	}
 
 	return &Position{
@@ -236,6 +265,7 @@ func (p *GT06Parser) parseGPS(data []byte, session *Session) (*Position, error) 
 		Speed:      speed,
 		Heading:    heading,
 		Satellites: sats,
+		Ignition:   ignition,
 		DeviceTime: deviceTime,
 		RawData:    hex.EncodeToString(data),
 	}, nil

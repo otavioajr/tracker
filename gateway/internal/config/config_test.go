@@ -33,6 +33,12 @@ func TestLoad_Defaults(t *testing.T) {
 	if cfg.BufferFallbackPath != "./buffer.jsonl" {
 		t.Errorf("BufferFallbackPath = %q, want './buffer.jsonl'", cfg.BufferFallbackPath)
 	}
+	// GT06 and other persistent-connection protocols send heartbeats every
+	// ~180s; the idle timeout must comfortably exceed that so connections are
+	// not dropped between heartbeats.
+	if cfg.IdleTimeout.Seconds() != 300 {
+		t.Errorf("IdleTimeout = %v, want 300s", cfg.IdleTimeout)
+	}
 }
 
 func TestLoad_MissingDatabaseURL(t *testing.T) {
@@ -87,5 +93,19 @@ func TestLoad_CustomIntervals(t *testing.T) {
 	}
 	if cfg.BufferCapacity != 5000 {
 		t.Errorf("BufferCapacity = %d, want 5000", cfg.BufferCapacity)
+	}
+}
+
+func TestLoad_CustomIdleTimeout(t *testing.T) {
+	t.Setenv("DATABASE_URL", "postgres://test:test@localhost/test")
+	t.Setenv("IDLE_TIMEOUT", "120s")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if cfg.IdleTimeout.Seconds() != 120 {
+		t.Errorf("IdleTimeout = %v, want 120s", cfg.IdleTimeout)
 	}
 }

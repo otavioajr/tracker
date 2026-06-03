@@ -99,8 +99,9 @@ func main() {
 
 	// TCP server
 	tcpServer := server.New(server.Config{
-		Port:   cfg.TCPPort,
-		Logger: logger,
+		Port:        cfg.TCPPort,
+		IdleTimeout: cfg.IdleTimeout,
+		Logger:      logger,
 	}, registry, protocol.NewDefaultDetector(), gw)
 
 	// Update metrics to use real connection count

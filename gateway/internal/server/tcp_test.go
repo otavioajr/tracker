@@ -252,7 +252,8 @@ func TestTCPServer_GT06LoginAndGPS(t *testing.T) {
 
 	// Send GPS packet (protocol 0x12) — same test vector from gt06_test.go
 	// Position: lat -23.5505, lon -46.6333, speed 45, heading 127, 8 sats
-	gps, _ := hex.DecodeString("787817121A03120A1E00800286D5740500D2642D0C7F0001AAAA0D0A")
+	// Course/status 0x087F → bit10=0 (south), bit11=1 (west)
+	gps, _ := hex.DecodeString("787817121A03120A1E00800286D5740500D2642D087F0001AAAA0D0A")
 	conn.Write(gps)
 
 	waitFor(t, 2*time.Second, func() bool {
@@ -280,6 +281,43 @@ func TestTCPServer_GT06LoginAndGPS(t *testing.T) {
 	}
 	if pos.Heading != 127 {
 		t.Fatalf("Heading = %f, want 127", pos.Heading)
+	}
+}
+
+// TestTCPServer_StopClosesIdleConnections verifies that Stop() returns promptly
+// by closing active connections, instead of waiting out the (potentially long)
+// idle timeout. With a 300s idle timeout this matters for clean redeploys.
+func TestTCPServer_StopClosesIdleConnections(t *testing.T) {
+	handler := &mockHandler{}
+	registry := protocol.NewRegistry(protocol.NewGT06Parser())
+	srv := New(Config{
+		Port:        0,
+		ReadTimeout: 5 * time.Second,
+		IdleTimeout: 30 * time.Second, // long on purpose: Stop must not wait for it
+	}, registry, protocol.NewDefaultDetector(), handler)
+
+	go srv.Start()
+	waitFor(t, 2*time.Second, func() bool { return srv.Addr() != "" })
+
+	conn, err := net.Dial("tcp", srv.Addr())
+	if err != nil {
+		t.Fatalf("dial: %v", err)
+	}
+	defer conn.Close()
+
+	// Send a GT06 login so the connection settles into the idle read loop.
+	login, _ := hex.DecodeString("78780D01035889905012781000050DD80D0A")
+	if _, err := conn.Write(login); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	time.Sleep(200 * time.Millisecond)
+
+	done := make(chan struct{})
+	go func() { srv.Stop(); close(done) }()
+	select {
+	case <-done:
+	case <-time.After(3 * time.Second):
+		t.Fatal("Stop() did not return within 3s — idle connection was not closed on shutdown")
 	}
 }
 
