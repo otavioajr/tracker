@@ -59,6 +59,20 @@ export async function markAlertRead(id: string) {
   return { error: "Alert not found or inaccessible." };
 }
 
+export async function markAllAlertsRead() {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("alerts")
+    .update({ read: true })
+    .eq("read", false);
+
+  if (error) return { error: error.message };
+
+  revalidatePath("/alerts");
+  revalidatePath("/", "layout");
+  return { success: true };
+}
+
 export async function getAlertRules() {
   const supabase = await createClient();
   const { data, error } = await supabase

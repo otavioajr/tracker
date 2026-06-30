@@ -3,15 +3,19 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import {
-  ALERT_READ_EVENT,
-  type AlertFeedAlert,
-} from "@/components/alerts/alert-feed";
+import { ALERT_READ_EVENT, type AlertFeedAlert } from "@/components/alerts/alert-feed";
 
 import { AlertBellMenu } from "./alert-bell-menu";
 
+const markAllAlertsRead = vi.hoisted(() => vi.fn());
+
+vi.mock("@/lib/actions/alerts", () => ({
+  markAllAlertsRead,
+}));
+
 vi.mock("@/components/alerts/alert-feed", () => ({
   ALERT_READ_EVENT: "tracker:alert-read",
+  ALERT_READ_ALL_EVENT: "tracker:alert-read-all",
   AlertFeed: AlertFeedMock,
 }));
 
@@ -69,6 +73,7 @@ function buildAlerts(): AlertFeedAlert[] {
 
 afterEach(() => {
   cleanup();
+  markAllAlertsRead.mockReset();
 });
 
 function getTrigger(label: string) {
@@ -100,6 +105,40 @@ function getPopover() {
 }
 
 describe("AlertBellMenu", () => {
+  it("clears all unread alerts from the badge when Limpar todos is clicked", async () => {
+    markAllAlertsRead.mockResolvedValueOnce({ success: true });
+    const alerts = buildAlerts();
+
+    render(<AlertBellMenu initialAlerts={alerts} initialUnreadCount={2} />);
+
+    fireEvent.click(getTrigger("Alertas (2 não lidos)"));
+
+    fireEvent.click(
+      within(getPopover()).getByRole("button", {
+        name: "Limpar todos os alertas",
+      })
+    );
+
+    await waitFor(() => {
+      expect(markAllAlertsRead).toHaveBeenCalledTimes(1);
+    });
+
+    await waitFor(() => {
+      expect(
+        document.querySelector(
+          'button[data-slot="popover-trigger"][aria-label="Alertas"]'
+        )
+      ).toBeTruthy();
+    });
+
+    expect(within(getPopover()).getByText("Nenhum novo alerta")).toBeTruthy();
+    expect(
+      within(getPopover()).queryByRole("button", {
+        name: "Limpar todos os alertas",
+      })
+    ).toBeNull();
+  });
+
   it("opens the dropdown and shows recent alerts", async () => {
     const alerts = buildAlerts();
 

@@ -6,9 +6,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { AlertBellMenu } from "./alert-bell-menu";
 
 const markAlertRead = vi.hoisted(() => vi.fn());
+const markAllAlertsRead = vi.hoisted(() => vi.fn());
 
 vi.mock("@/lib/actions/alerts", () => ({
   markAlertRead,
+  markAllAlertsRead,
 }));
 
 const alerts = [
@@ -29,6 +31,7 @@ const alerts = [
 afterEach(() => {
   cleanup();
   markAlertRead.mockReset();
+  markAllAlertsRead.mockReset();
 });
 
 function getTrigger(label: string) {
@@ -51,6 +54,47 @@ function getPopover() {
 }
 
 describe("AlertBellMenu integration", () => {
+  it("clears all unread alerts through the real feed", async () => {
+    markAllAlertsRead.mockResolvedValueOnce({ success: true });
+
+    render(<AlertBellMenu initialAlerts={alerts} initialUnreadCount={2} />);
+
+    fireEvent.click(getTrigger("Alertas (2 não lidos)"));
+
+    await waitFor(() => {
+      expect(
+        within(getPopover()).getByRole("button", {
+          name: "Limpar todos os alertas",
+        })
+      ).toBeTruthy();
+    });
+
+    fireEvent.click(
+      within(getPopover()).getByRole("button", {
+        name: "Limpar todos os alertas",
+      })
+    );
+
+    await waitFor(() => {
+      expect(markAllAlertsRead).toHaveBeenCalledTimes(1);
+    });
+
+    await waitFor(() => {
+      expect(
+        document.querySelector(
+          'button[data-slot="popover-trigger"][aria-label="Alertas"]'
+        )
+      ).toBeTruthy();
+    });
+
+    expect(within(getPopover()).getByText("Nenhum novo alerta")).toBeTruthy();
+    expect(
+      within(getPopover()).queryByRole("button", {
+        name: "Marcar alerta como lido",
+      })
+    ).toBeNull();
+  });
+
   it.each([
     { result: { success: true }, label: "fresh success" },
     {

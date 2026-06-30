@@ -9,6 +9,7 @@ import { AlertTriangle, Eye, Info, Zap } from "lucide-react";
 import { useEffect, useState } from "react";
 
 export const ALERT_READ_EVENT = "tracker:alert-read";
+export const ALERT_READ_ALL_EVENT = "tracker:alert-read-all";
 
 type AlertReadEventDetail = {
   id: string;
@@ -113,10 +114,18 @@ export function AlertFeed({
       );
     }
 
+    function handleAlertReadAll() {
+      setItems((current) =>
+        current.map((item) => (item.read ? item : { ...item, read: true }))
+      );
+    }
+
     window.addEventListener(ALERT_READ_EVENT, handleAlertRead);
+    window.addEventListener(ALERT_READ_ALL_EVENT, handleAlertReadAll);
 
     return () => {
       window.removeEventListener(ALERT_READ_EVENT, handleAlertRead);
+      window.removeEventListener(ALERT_READ_ALL_EVENT, handleAlertReadAll);
     };
   }, []);
 
