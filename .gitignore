@@ -32,3 +32,6 @@ Thumbs.db
 
 # Docker
 docker-compose.override.yml
+
+# Vercel: vínculo local do projeto; ambientes já ignorados acima.
+.vercel/
