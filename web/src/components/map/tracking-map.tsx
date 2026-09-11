@@ -69,6 +69,7 @@ const GeofenceLayerDynamic = dynamic(
 
 export type TrackingMapProps = {
   positions: VehiclePosition[];
+  now: number;
   trails: DashboardVehicleTrail[];
   className?: string;
   selectedDeviceId: string | null;
@@ -89,6 +90,7 @@ export type TrackingMapProps = {
 
 export function TrackingMap({
   positions,
+  now,
   trails,
   className,
   selectedDeviceId,
@@ -177,6 +179,7 @@ export function TrackingMap({
         <VehicleMarkerDynamic
           key={pos.device_id}
           position={pos}
+          now={now}
           selected={pos.device_id === selectedDeviceId}
           onSelect={onSelect}
           onFollow={onFollow}

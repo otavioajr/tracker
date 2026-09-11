@@ -33,6 +33,9 @@ func TestLoad_Defaults(t *testing.T) {
 	if cfg.BufferFallbackPath != "./buffer.jsonl" {
 		t.Errorf("BufferFallbackPath = %q, want './buffer.jsonl'", cfg.BufferFallbackPath)
 	}
+	if cfg.CommandAddr != "127.0.0.1:9091" {
+		t.Errorf("CommandAddr = %q, want 127.0.0.1:9091", cfg.CommandAddr)
+	}
 }
 
 func TestLoad_MissingDatabaseURL(t *testing.T) {

@@ -17,6 +17,8 @@ type Position struct {
 	Ignition   bool
 	Battery    float64 // volts
 	DeviceTime time.Time
+	// ReceivedAt is when the TCP frame completed, before parse/ACK/storage delay.
+	ReceivedAt time.Time
 	RawData    string // original message for debugging
 	RemoteAddr string // client IP:port, set by TCP handler
 }

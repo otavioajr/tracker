@@ -8,6 +8,7 @@ export type VehiclePosition = {
   ignition: boolean;
   device_time: string;
   server_time: string;
+  received_at?: string | null;
   plate?: string;
   vehicle_name?: string;
   vehicle_model?: string;
@@ -28,6 +29,7 @@ export type DashboardTrailPoint = {
   latitude: number;
   longitude: number;
   server_time: string;
+  device_time?: string;
 };
 
 export type DashboardVehicleTrail = {

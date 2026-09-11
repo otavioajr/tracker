@@ -2,10 +2,14 @@ import type { VehicleOperationalStatus, VehiclePosition } from "@/components/map
 
 export type DashboardVehicleFilter = "all" | "moving" | "stopped" | "offline";
 
+export const POSITION_STALE_AFTER_MS = 5 * 60 * 1000;
+export const POSITION_OFFLINE_AFTER_MS = 30 * 60 * 1000;
+export const POSITION_CLOCK_INTERVAL_MS = 15 * 1000;
+
 type DashboardVehicleLike = Pick<
   VehiclePosition,
   "device_id" | "ignition" | "speed" | "server_time" | "plate" | "vehicle_name"
->;
+> & Partial<Pick<VehiclePosition, "device_time">>;
 
 export const DASHBOARD_STATUS_META: Record<
   VehicleOperationalStatus,
@@ -38,12 +42,26 @@ export function getVehicleDisplayLabel(
   return position.vehicle_name || position.plate || position.device_id;
 }
 
-export function getVehicleOperationalStatus(
-  position: Pick<DashboardVehicleLike, "ignition" | "speed" | "server_time">
-): VehicleOperationalStatus {
-  const minutesAgo = (Date.now() - new Date(position.server_time).getTime()) / 60000;
+export function getPositionAgeMs(
+  position: Pick<DashboardVehicleLike, "device_time" | "server_time">,
+  now = Date.now()
+) {
+  const measuredAt = Date.parse(position.device_time || position.server_time);
+  return Number.isFinite(measuredAt) ? now - measuredAt : Number.POSITIVE_INFINITY;
+}
 
-  if (minutesAgo > 30) {
+export function isPositionStale(
+  position: Pick<DashboardVehicleLike, "device_time" | "server_time">,
+  now = Date.now()
+) {
+  return getPositionAgeMs(position, now) > POSITION_STALE_AFTER_MS;
+}
+
+export function getVehicleOperationalStatus(
+  position: Pick<DashboardVehicleLike, "ignition" | "speed" | "server_time" | "device_time">,
+  now = Date.now()
+): VehicleOperationalStatus {
+  if (getPositionAgeMs(position, now) > POSITION_OFFLINE_AFTER_MS) {
     return "offline";
   }
 
@@ -54,11 +72,8 @@ export function getVehicleOperationalStatus(
   return "stopped";
 }
 
-export function formatLastSignalRelative(serverTime: string) {
-  const minutesAgo = Math.max(
-    0,
-    Math.floor((Date.now() - new Date(serverTime).getTime()) / 60000)
-  );
+export function formatLastSignalRelative(signalTime: string, now = Date.now()) {
+  const minutesAgo = Math.max(0, Math.floor((now - new Date(signalTime).getTime()) / 60000));
 
   if (minutesAgo < 1) {
     return "agora";
@@ -91,7 +106,7 @@ export function filterDashboardVehicles<T extends DashboardVehicleLike>(
   const normalizedQuery = query.trim().toLowerCase();
 
   return positions.filter((position) => {
-    if (status !== "all" && getVehicleOperationalStatus(position) !== status) {
+    if (status !== "all" && getVehicleOperationalStatus(position, Date.now()) !== status) {
       return false;
     }
 

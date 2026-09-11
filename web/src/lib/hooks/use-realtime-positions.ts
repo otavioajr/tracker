@@ -1,13 +1,16 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { getLatestPositions } from "@/lib/actions/positions";
 import type { VehiclePosition } from "@/lib/actions/positions";
+import {
+  normalizeRealtimeLocation,
+  reconcilePositions,
+  shouldReplaceVehiclePosition,
+} from "@/lib/map/position-data";
 
-type GeoJsonPoint = {
-  type: "Point";
-  coordinates: [number, number]; // [longitude, latitude]
-};
+export type RealtimeConnectionStatus = "connecting" | "live" | "recovering" | "offline";
 
 type LatestPositionRow = {
   device_id: string;
@@ -18,97 +21,103 @@ type LatestPositionRow = {
   ignition: boolean | null;
   device_time: string;
   server_time: string;
+  received_at?: string | null;
 };
 
-export function useRealtimePositions(
-  initialPositions: VehiclePosition[]
-): VehiclePosition[] {
-  const [positionsMap, setPositionsMap] = useState<Map<string, VehiclePosition>>(
-    () => new Map(initialPositions.map((p) => [p.device_id, p]))
-  );
+const RECOVERY_POLL_MS = 30_000;
+
+export function useRealtimePositions(initialPositions: VehiclePosition[]): VehiclePosition[] {
+  return useRealtimePositionsState(initialPositions).positions;
+}
+
+export function useRealtimePositionsState(initialPositions: VehiclePosition[]): {
+  positions: VehiclePosition[];
+  connectionStatus: RealtimeConnectionStatus;
+} {
+  const [positions, setPositions] = useState(initialPositions);
+  const [connectionStatus, setConnectionStatus] =
+    useState<RealtimeConnectionStatus>("connecting");
   const supabaseRef = useRef(createClient());
+  const positionsRef = useRef(positions);
+  positionsRef.current = positions;
+
+  const applySnapshot = useCallback((incoming: VehiclePosition[]) => {
+    setPositions((current) => reconcilePositions(current, incoming));
+  }, []);
+
+  const recover = useCallback(async () => {
+    setConnectionStatus((status) => (status === "live" ? status : "recovering"));
+    try {
+      applySnapshot(await getLatestPositions());
+      setConnectionStatus("live");
+    } catch (error) {
+      console.warn("latest_positions recovery failed", error);
+      setConnectionStatus("offline");
+    }
+  }, [applySnapshot]);
 
   useEffect(() => {
-    setPositionsMap((prev) => {
-      const next = new Map(prev);
-
-      for (const initialPosition of initialPositions) {
-        const existing = next.get(initialPosition.device_id);
-        next.set(
-          initialPosition.device_id,
-          shouldReplaceVehiclePosition(existing, initialPosition)
-            ? initialPosition
-            : existing!
-        );
-      }
-
-      return next;
-    });
-  }, [initialPositions]);
+    applySnapshot(initialPositions);
+  }, [applySnapshot, initialPositions]);
 
   useEffect(() => {
     const supabase = supabaseRef.current;
-
     const channel = supabase
       .channel("realtime:latest_positions")
       .on(
         "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "latest_positions",
-        },
+        { event: "*", schema: "public", table: "latest_positions" },
         (payload) => {
-          setPositionsMap((prev) => {
-            const next = new Map(prev);
-            const row = payload.new as LatestPositionRow;
-            const existing = next.get(row.device_id);
+          const row = payload.new as LatestPositionRow;
+          setPositions((current) => {
+            const existing = current.find((position) => position.device_id === row.device_id);
             const merged = mergeRealtimeVehiclePosition(existing, row);
-
-            if (merged) {
-              next.set(row.device_id, merged);
+            if (!merged) {
+              return current;
             }
-
-            return next;
+            if (existing && merged === existing) {
+              return current;
+            }
+            if (!existing) {
+              return [...current, merged];
+            }
+            return current.map((position) =>
+              position.device_id === merged.device_id ? merged : position
+            );
           });
         }
       )
       .subscribe((status) => {
-        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
-          console.warn("latest_positions realtime channel degraded", { status });
+        if (status === "SUBSCRIBED") {
+          setConnectionStatus("live");
+          return;
+        }
+        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
+          setConnectionStatus("recovering");
+          void recover();
         }
       });
 
+    const onVisible = () => {
+      if (document.visibilityState === "visible") {
+        void recover();
+      }
+    };
+    window.addEventListener("online", recover);
+    document.addEventListener("visibilitychange", onVisible);
+    const poll = window.setInterval(() => {
+      void recover();
+    }, RECOVERY_POLL_MS);
+
     return () => {
+      window.clearInterval(poll);
+      window.removeEventListener("online", recover);
+      document.removeEventListener("visibilitychange", onVisible);
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [recover]);
 
-  return Array.from(positionsMap.values());
-}
-
-export function normalizeRealtimeLocation(location: unknown): GeoJsonPoint | null {
-  const parsed = typeof location === "string" ? safeJsonParse(location) : location;
-
-  if (
-    !parsed ||
-    typeof parsed !== "object" ||
-    !("type" in parsed) ||
-    !("coordinates" in parsed)
-  ) {
-    return null;
-  }
-
-  const point = parsed as GeoJsonPoint;
-  if (
-    point.type !== "Point" ||
-    !Array.isArray(point.coordinates) ||
-    point.coordinates.length !== 2
-  ) {
-    return null;
-  }
-
-  return point;
+  return { positions, connectionStatus };
 }
 
 export function mergeRealtimeVehiclePosition(
@@ -131,6 +140,7 @@ export function mergeRealtimeVehiclePosition(
     ignition: row.ignition ?? false,
     device_time: row.device_time,
     server_time: row.server_time,
+    received_at: row.received_at ?? existing?.received_at ?? null,
     plate: existing?.plate,
     vehicle_name: existing?.vehicle_name,
     vehicle_model: existing?.vehicle_model,
@@ -143,21 +153,4 @@ export function mergeRealtimeVehiclePosition(
   return candidate;
 }
 
-function shouldReplaceVehiclePosition(
-  current: VehiclePosition | undefined,
-  next: VehiclePosition
-) {
-  if (!current) {
-    return true;
-  }
-
-  return new Date(next.server_time).getTime() >= new Date(current.server_time).getTime();
-}
-
-function safeJsonParse(value: string): unknown {
-  try {
-    return JSON.parse(value);
-  } catch {
-    return null;
-  }
-}
+export { normalizeRealtimeLocation };

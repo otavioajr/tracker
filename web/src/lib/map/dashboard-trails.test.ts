@@ -54,6 +54,7 @@ describe("dashboard-trails", () => {
         latitude: -23.551,
         longitude: -46.631,
         server_time: "2026-04-07T12:01:00.000Z",
+        device_time: "2026-04-07T12:01:00.000Z",
       },
     ]);
     expect(result.trailCursors["truck-1"]).toBe("2026-04-07T12:01:00.000Z");

@@ -3,7 +3,12 @@
 import { ArrowUpRight, LocateFixed, Power } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { DASHBOARD_STATUS_META, getVehicleDisplayLabel } from "@/lib/map/dashboard-map-utils";
+import {
+  DASHBOARD_STATUS_META,
+  formatLastSignalRelative,
+  getVehicleDisplayLabel,
+  isPositionStale,
+} from "@/lib/map/dashboard-map-utils";
 import { cn } from "@/lib/utils";
 
 import type { VehicleOperationalStatus, VehiclePosition } from "./types";
@@ -11,15 +16,18 @@ import type { VehicleOperationalStatus, VehiclePosition } from "./types";
 type DashboardFollowBarProps = {
   vehicle: VehiclePosition;
   status: VehicleOperationalStatus;
+  now: number;
   onExitFollow: () => void;
 };
 
 export function DashboardFollowBar({
   vehicle,
   status,
+  now,
   onExitFollow,
 }: DashboardFollowBarProps) {
   const statusMeta = DASHBOARD_STATUS_META[status];
+  const stale = isPositionStale(vehicle, now);
 
   return (
     <div className="pointer-events-auto flex items-center gap-2 rounded-2xl border border-white/10 bg-background/88 px-2 py-2 text-foreground shadow-[0_20px_40px_-24px_rgba(0,0,0,0.7)] backdrop-blur-xl lg:gap-3 lg:px-3 lg:py-3 lg:min-w-[18rem] lg:max-w-[calc(100vw-2rem)]">
@@ -28,7 +36,7 @@ export function DashboardFollowBar({
       </div>
       <div className="min-w-0 flex-1">
         <p className="text-[9px] font-semibold uppercase tracking-[0.16em] text-muted-foreground lg:text-[11px] lg:tracking-[0.18em]">
-          Seguindo agora
+          {stale ? "Seguindo última posição conhecida" : "Seguindo agora"}
         </p>
         <div className="mt-0.5 flex items-center gap-1.5 lg:mt-1 lg:gap-2">
           <p className="truncate text-xs font-semibold text-foreground lg:text-sm">
@@ -57,6 +65,9 @@ export function DashboardFollowBar({
             <span className={cn(vehicle.ignition ? "text-emerald-400" : "text-muted-foreground")}>
               {vehicle.ignition ? "Ligada" : "Desligada"}
             </span>
+          </span>
+          <span className="font-mono tabular-nums">
+            {formatLastSignalRelative(vehicle.device_time || vehicle.server_time, now)}
           </span>
         </div>
       </div>
