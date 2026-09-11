@@ -205,6 +205,7 @@ func buildBatchInsert(positions []*protocol.Position, devices map[string]DeviceI
 	var args []any
 	paramIdx := 1
 
+	seen := make(map[string]struct{})
 	for _, pos := range positions {
 		info, ok := devices[pos.IMEI]
 		if !ok {
@@ -212,20 +213,31 @@ func buildBatchInsert(positions []*protocol.Position, devices map[string]DeviceI
 		}
 
 		rawJSON, _ := json.Marshal(map[string]string{"raw": pos.RawData})
+		// Drop only identical device+time+payload copies inside this flush batch.
+		dedupKey := info.DeviceID + "|" + pos.DeviceTime.UTC().Format(time.RFC3339Nano) + "|" + string(rawJSON)
+		if _, dup := seen[dedupKey]; dup {
+			continue
+		}
+		seen[dedupKey] = struct{}{}
+
+		receivedAt := pos.ReceivedAt
+		if receivedAt.IsZero() {
+			receivedAt = time.Now().UTC()
+		}
 
 		values = append(values, fmt.Sprintf(
-			"($%d, $%d, $%d, ST_SetSRID(ST_MakePoint($%d, $%d), 4326), $%d, $%d, $%d, $%d, $%d, $%d::jsonb, $%d, now())",
+			"($%d, $%d, $%d, ST_SetSRID(ST_MakePoint($%d, $%d), 4326), $%d, $%d, $%d, $%d, $%d, $%d::jsonb, $%d, $%d, now())",
 			paramIdx, paramIdx+1, paramIdx+2, paramIdx+3, paramIdx+4,
 			paramIdx+5, paramIdx+6, paramIdx+7, paramIdx+8,
-			paramIdx+9, paramIdx+10, paramIdx+11,
+			paramIdx+9, paramIdx+10, paramIdx+11, paramIdx+12,
 		))
 		args = append(args,
 			info.DeviceID, info.TenantID, info.VehicleID,
 			pos.Longitude, pos.Latitude,
 			pos.Speed, pos.Heading, pos.Ignition, pos.Altitude,
-			pos.Satellites, string(rawJSON), pos.DeviceTime,
+			pos.Satellites, string(rawJSON), pos.DeviceTime, receivedAt,
 		)
-		paramIdx += 12
+		paramIdx += 13
 	}
 
 	if len(values) == 0 {
@@ -233,7 +245,7 @@ func buildBatchInsert(positions []*protocol.Position, devices map[string]DeviceI
 	}
 
 	sql := fmt.Sprintf(
-		"INSERT INTO positions (device_id, tenant_id, vehicle_id, location, speed, heading, ignition, altitude, satellites, raw_data, device_time, server_time) VALUES %s",
+		"INSERT INTO positions (device_id, tenant_id, vehicle_id, location, speed, heading, ignition, altitude, satellites, raw_data, device_time, received_at, server_time) VALUES %s",
 		strings.Join(values, ", "),
 	)
 

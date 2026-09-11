@@ -2,6 +2,7 @@ package protocol
 
 import (
 	"bufio"
+	"bytes"
 	"fmt"
 	"strconv"
 	"strings"
@@ -16,6 +17,7 @@ const (
 	suntechPrefixSTT        = "STT;"
 	suntechPrefix30         = "ST30"
 	suntechPrefix34         = "ST34"
+	suntechMaxFrameBytes    = 4096
 )
 
 type SuntechParser struct{}
@@ -36,20 +38,43 @@ func (p *SuntechParser) Identify(data []byte) bool {
 }
 
 func (p *SuntechParser) ReadFrame(reader *bufio.Reader) ([]byte, error) {
-	line, err := reader.ReadBytes('\n')
-	if err != nil {
-		if len(line) == 0 {
-			return nil, err
+	var frame []byte
+	for {
+		b, err := reader.ReadByte()
+		if err != nil {
+			if len(frame) == 0 {
+				return nil, err
+			}
+			// Incomplete: a CR/LF-less leftover must not become a position.
+			return nil, fmt.Errorf("suntech: incomplete frame: %w", err)
 		}
+		if b == '\n' {
+			if n := len(frame); n > 0 && frame[n-1] == '\r' {
+				frame = frame[:n-1]
+			}
+			return frame, nil
+		}
+		if b == '\r' {
+			// Only consume LF if it is already buffered. Peek would block on a live TCP socket.
+			if reader.Buffered() > 0 {
+				if next, err := reader.Peek(1); err == nil && next[0] == '\n' {
+					_, _ = reader.ReadByte()
+				}
+			}
+			return frame, nil
+		}
+		if len(frame) >= suntechMaxFrameBytes {
+			return nil, fmt.Errorf("suntech: frame exceeds %d bytes", suntechMaxFrameBytes)
+		}
+		frame = append(frame, b)
 	}
-	for len(line) > 0 && (line[len(line)-1] == '\n' || line[len(line)-1] == '\r') {
-		line = line[:len(line)-1]
-	}
-	return line, nil
 }
 
 func (p *SuntechParser) Parse(data []byte, session *Session) (*Position, error) {
-	raw := strings.TrimRight(string(data), "\r\n")
+	if bytes.IndexByte(data, '\r') >= 0 || bytes.IndexByte(data, '\n') >= 0 {
+		return nil, fmt.Errorf("suntech: frame contains an internal delimiter")
+	}
+	raw := string(data)
 	fields := strings.Split(raw, ";")
 
 	isCompact := strings.HasPrefix(raw, suntechPrefixSTT)

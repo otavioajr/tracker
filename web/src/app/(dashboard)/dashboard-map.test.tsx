@@ -66,6 +66,10 @@ vi.mock("next/dynamic", () => ({
 
 vi.mock("@/lib/hooks/use-realtime-positions", () => ({
   useRealtimePositions: (positions: unknown[]) => mockUseRealtimePositions(positions),
+  useRealtimePositionsState: (positions: unknown[]) => ({
+    positions: mockUseRealtimePositions(positions),
+    connectionStatus: "live",
+  }),
 }));
 
 import { DashboardMap } from "./dashboard-map";
@@ -78,8 +82,8 @@ const positions = [
     speed: 42,
     heading: 0,
     ignition: true,
-    device_time: "2026-04-04T14:59:00.000Z",
-    server_time: "2026-04-04T15:00:00.000Z",
+    device_time: "2026-04-04T15:04:00.000Z",
+    server_time: "2026-04-04T15:04:00.000Z",
     plate: "ABC1D23",
     vehicle_name: "Truck 01",
     vehicle_model: "Cargo",
@@ -91,8 +95,8 @@ const positions = [
     speed: 0,
     heading: 0,
     ignition: true,
-    device_time: "2026-04-04T14:58:00.000Z",
-    server_time: "2026-04-04T14:57:00.000Z",
+    device_time: "2026-04-04T15:03:00.000Z",
+    server_time: "2026-04-04T15:03:00.000Z",
     plate: "XYZ9K88",
     vehicle_name: "Van 02",
     vehicle_model: "Sprinter",
@@ -104,6 +108,7 @@ const newerPositions = [
     ...positions[0],
     latitude: -23.5008,
     longitude: -46.6008,
+    device_time: "2026-04-04T15:06:00.000Z",
     server_time: "2026-04-04T15:06:00.000Z",
   },
   positions[1],

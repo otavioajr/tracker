@@ -1,11 +1,40 @@
-.PHONY: help gateway web simulator db-push db-types db-reset
+.PHONY: help gateway web simulator db-push db-types db-reset gateway-build gateway-release
+
+# Anchor paths to this Makefile, including invocations with make -C or -f.
+REPO_ROOT := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
+BUILDINFO_PACKAGE := github.com/otavioajr/tracker/gateway/internal/buildinfo
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
 
 # --- Gateway ---
-gateway-build: ## Build the Go gateway
-	cd gateway && go build -o bin/gateway ./cmd/gateway
+gateway-build: ## Build the native Go gateway with source identity
+
+gateway-release: ## Build a clean, reproducible Linux/amd64 gateway
+
+# Release time is SOURCE_DATE_EPOCH or commit time: identical inputs yield identical bytes.
+gateway-build gateway-release:
+	@set -eu; \
+	cd "$(REPO_ROOT)"; \
+	revision=$$(git rev-parse --verify HEAD); \
+	status=$$(git status --porcelain=v1 --untracked-files=all); \
+	dirty=false; [ -z "$$status" ] || dirty=true; \
+	target=''; output=bin/gateway; \
+	if [ "$@" = gateway-release ]; then \
+		if [ "$$dirty" != false ]; then \
+			printf '%s\n' 'Release requires a clean working tree (including untracked files).' >&2; exit 1; \
+		fi; \
+		epoch=$${SOURCE_DATE_EPOCH:-$$(git show -s --format=%ct HEAD)}; \
+		case "$$epoch" in ''|*[!0-9]*) printf '%s\n' 'SOURCE_DATE_EPOCH must be an integer Unix timestamp.' >&2; exit 1;; esac; \
+		build_time=$$(date -u -d "@$$epoch" '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || date -u -r "$$epoch" '+%Y-%m-%dT%H:%M:%SZ'); \
+		target='GOOS=linux GOARCH=amd64 GOAMD64=v1 CGO_ENABLED=0'; output=bin/gateway-linux-amd64; \
+	else \
+		build_time=$$(date -u '+%Y-%m-%dT%H:%M:%SZ'); \
+	fi; \
+	cd gateway; \
+	env $$target go build -mod=readonly -trimpath -buildvcs=false \
+		-ldflags "-buildid= -X $(BUILDINFO_PACKAGE).revision=$$revision -X $(BUILDINFO_PACKAGE).buildTime=$$build_time -X $(BUILDINFO_PACKAGE).dirty=$$dirty" \
+		-o "$$output" ./cmd/gateway
 
 gateway-run: ## Run the Go gateway
 	cd gateway && go run ./cmd/gateway

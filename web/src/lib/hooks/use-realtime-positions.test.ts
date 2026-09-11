@@ -57,6 +57,7 @@ describe("use-realtime-positions helpers", () => {
       heading: 15,
       device_time: "2026-04-07T12:01:00.000Z",
       server_time: "2026-04-07T12:01:00.000Z",
+      received_at: null,
     });
   });
 
@@ -68,7 +69,7 @@ describe("use-realtime-positions helpers", () => {
       speed: 10,
       heading: 0,
       ignition: true,
-      device_time: "2026-04-07T12:00:00.000Z",
+      device_time: "2026-04-07T12:05:00.000Z",
       server_time: "2026-04-07T12:05:00.000Z",
     };
 
@@ -83,7 +84,7 @@ describe("use-realtime-positions helpers", () => {
         heading: 15,
         ignition: true,
         device_time: "2026-04-07T12:01:00.000Z",
-        server_time: "2026-04-07T12:01:00.000Z",
+        server_time: "2026-04-07T12:06:00.000Z",
       })
     ).toBe(existing);
   });

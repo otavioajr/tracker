@@ -49,9 +49,12 @@ func TestBuildBatchSQL(t *testing.T) {
 	if !strings.Contains(sql, "vehicle_id") {
 		t.Error("expected SQL to contain vehicle_id")
 	}
-	// 2 positions × 12 args each = 24 args
-	if len(args) != 24 {
-		t.Errorf("expected 24 args, got %d", len(args))
+	if !strings.Contains(sql, "received_at") {
+		t.Error("expected SQL to contain received_at")
+	}
+	// 2 positions × 13 args each = 26 args
+	if len(args) != 26 {
+		t.Errorf("expected 26 args, got %d", len(args))
 	}
 }
 
@@ -114,7 +117,7 @@ func TestBuildBatchInsertCompactSTTUsesDeviceCacheBySerialKey(t *testing.T) {
 	if sql == "" {
 		t.Fatal("expected non-empty SQL for compact STT device key match")
 	}
-	if len(args) != 12 {
-		t.Errorf("expected 12 args, got %d", len(args))
+	if len(args) != 13 {
+		t.Errorf("expected 13 args, got %d", len(args))
 	}
 }

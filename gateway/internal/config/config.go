@@ -8,9 +8,12 @@ import (
 )
 
 type Config struct {
-	TCPPort              int
-	DatabaseURL          string
-	MetricsPort          int
+	TCPPort     int
+	DatabaseURL string
+	MetricsPort int
+	// Commands stay local-only unless an authenticated external listener is set.
+	CommandAddr          string
+	CommandToken         string
 	RuleSyncInterval     time.Duration
 	DeviceReloadInterval time.Duration
 	BufferCapacity       int
@@ -23,6 +26,7 @@ func Load() (*Config, error) {
 	cfg := &Config{
 		TCPPort:              5001,
 		MetricsPort:          9090,
+		CommandAddr:          "127.0.0.1:9091",
 		RuleSyncInterval:     30 * time.Second,
 		DeviceReloadInterval: 5 * time.Second,
 		BufferCapacity:       10000,
@@ -95,6 +99,11 @@ func Load() (*Config, error) {
 	if path := os.Getenv("BUFFER_FALLBACK_PATH"); path != "" {
 		cfg.BufferFallbackPath = path
 	}
+
+	if addr := os.Getenv("COMMAND_ADDR"); addr != "" {
+		cfg.CommandAddr = addr
+	}
+	cfg.CommandToken = os.Getenv("COMMAND_TOKEN")
 
 	return cfg, nil
 }

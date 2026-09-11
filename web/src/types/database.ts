@@ -221,6 +221,7 @@ export type Database = {
           heading: number | null
           ignition: boolean | null
           location: unknown
+          received_at: string | null
           satellites: number | null
           server_time: string
           speed: number | null
@@ -234,6 +235,7 @@ export type Database = {
           heading?: number | null
           ignition?: boolean | null
           location: unknown
+          received_at?: string | null
           satellites?: number | null
           server_time?: string
           speed?: number | null
@@ -247,6 +249,7 @@ export type Database = {
           heading?: number | null
           ignition?: boolean | null
           location?: unknown
+          received_at?: string | null
           satellites?: number | null
           server_time?: string
           speed?: number | null
@@ -312,6 +315,7 @@ export type Database = {
           ignition: boolean | null
           location: unknown
           raw_data: Json | null
+          received_at: string | null
           satellites: number | null
           server_time: string
           speed: number | null
@@ -327,6 +331,7 @@ export type Database = {
           ignition?: boolean | null
           location: unknown
           raw_data?: Json | null
+          received_at?: string | null
           satellites?: number | null
           server_time?: string
           speed?: number | null
@@ -342,6 +347,7 @@ export type Database = {
           ignition?: boolean | null
           location?: unknown
           raw_data?: Json | null
+          received_at?: string | null
           satellites?: number | null
           server_time?: string
           speed?: number | null

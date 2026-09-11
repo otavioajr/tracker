@@ -2,6 +2,7 @@ package protocol
 
 import (
 	"bufio"
+	"io"
 	"strings"
 	"testing"
 	"time"
@@ -182,14 +183,55 @@ func TestSuntechReadFrame(t *testing.T) {
 
 func TestSuntechReadFrameWithoutTrailingNewline(t *testing.T) {
 	p := NewSuntechParser()
-	input := compactSTTMessage()
-	reader := bufio.NewReader(strings.NewReader(input))
-
-	frame, err := p.ReadFrame(reader)
-	if err != nil {
-		t.Fatalf("ReadFrame error: %v", err)
+	reader := bufio.NewReader(strings.NewReader(compactSTTMessage()))
+	if _, err := p.ReadFrame(reader); err == nil {
+		t.Fatal("incomplete frame at EOF must be rejected")
 	}
-	if string(frame) != input {
-		t.Fatalf("ReadFrame = %q, want %q", string(frame), input)
+}
+
+func TestSuntechReadFrameCRAndCRLF(t *testing.T) {
+	p := NewSuntechParser()
+	body := "ST300STT;123456789012345;04;374;20260318;10:30:00;0CD4A;-23.55;-046.63;0;0;11;1;0;12.24"
+	for _, sep := range []string{"\r", "\n", "\r\n"} {
+		reader := bufio.NewReader(strings.NewReader(body + sep + body + sep))
+		for i := 0; i < 2; i++ {
+			frame, err := p.ReadFrame(reader)
+			if err != nil || string(frame) != body {
+				t.Fatalf("sep %q frame %d: %q, %v", sep, i, frame, err)
+			}
+		}
+	}
+}
+
+func TestSuntechReadFrameCRDoesNotWaitForLaterLF(t *testing.T) {
+	p := NewSuntechParser()
+	body := "ST300STT;123456789012345;04;374;20260318;10:30:00;0CD4A;-23.55;-046.63;0;0;11;1;0;12.24"
+	pr, pw := io.Pipe()
+	done := make(chan struct{})
+	var frame []byte
+	var err error
+	go func() {
+		frame, err = p.ReadFrame(bufio.NewReader(pr))
+		close(done)
+	}()
+	if _, writeErr := pw.Write([]byte(body + "\r")); writeErr != nil {
+		t.Fatal(writeErr)
+	}
+	select {
+	case <-done:
+	case <-time.After(200 * time.Millisecond):
+		t.Fatal("CR frame waited for a later LF")
+	}
+	if err != nil || string(frame) != body {
+		t.Fatalf("frame=%q err=%v", frame, err)
+	}
+	pw.Close()
+}
+
+func TestSuntechParseRejectsInternalDelimiter(t *testing.T) {
+	p := NewSuntechParser()
+	data := []byte("ST300STT;123456789012345;04;374;20260318;10:30:00;0CD4A;-23.55;-046.63;0;0;11;1;0;12.24\rST300STT;x")
+	if _, err := p.Parse(data, &Session{}); err == nil {
+		t.Fatal("expected error for concatenated frames")
 	}
 }

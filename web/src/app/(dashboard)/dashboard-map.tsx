@@ -18,7 +18,7 @@ import type {
 import type { TrackingMapProps } from "@/components/map/tracking-map";
 import type { GeofenceRow } from "@/lib/geofences/types";
 import { Button } from "@/components/ui/button";
-import { useRealtimePositions } from "@/lib/hooks/use-realtime-positions";
+import { useRealtimePositionsState } from "@/lib/hooks/use-realtime-positions";
 import {
   activateTrailForVehicle,
   clearTrailForVehicle,
@@ -34,6 +34,7 @@ import {
 } from "@/lib/map/map-base-layer";
 import {
   type DashboardVehicleFilter,
+  POSITION_CLOCK_INTERVAL_MS,
   filterDashboardVehicles,
   formatLastSignalRelative,
   getVehicleDisplayLabel,
@@ -56,6 +57,7 @@ type DashboardTrailAction =
   | {
       type: "toggle";
       deviceId: string;
+      currentDeviceTime?: string;
       currentServerTime?: string;
     }
   | {
@@ -87,6 +89,7 @@ function dashboardTrailStateReducer(
 
     return activateTrailForVehicle({
       deviceId: action.deviceId,
+      currentDeviceTime: action.currentDeviceTime,
       currentServerTime: action.currentServerTime,
       activeTrailDeviceIds: prev.activeTrailDeviceIds,
       trailCursors: prev.trailCursors,
@@ -138,7 +141,8 @@ export function DashboardMap({
   initialGeofences,
   userId,
 }: DashboardMapProps) {
-  const positions = useRealtimePositions(initialPositions);
+  const { positions, connectionStatus } = useRealtimePositionsState(initialPositions);
+  const [now, setNow] = useState(() => Date.now());
   const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(null);
   const [followedDeviceId, setFollowedDeviceId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -158,6 +162,11 @@ export function DashboardMap({
   const [mapBearing, setMapBearing] = useState(0);
   const [resetRotationTrigger, setResetRotationTrigger] = useState(0);
   const showResetRotation = rotationEnabled && Math.abs(mapBearing) > 0.5;
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), POSITION_CLOCK_INTERVAL_MS);
+    return () => window.clearInterval(timer);
+  }, []);
+
   const [trailState, dispatchTrailState] = useReducer(
     dashboardTrailStateReducer,
     {
@@ -178,7 +187,7 @@ export function DashboardMap({
     const hydratedTrailCursors = Object.fromEntries(
       preferences.activeTrailDeviceIds.map((deviceId) => [
         deviceId,
-        positions.find((position) => position.device_id === deviceId)?.server_time ?? "",
+        positions.find((position) => position.device_id === deviceId)?.device_time ?? "",
       ])
     );
 
@@ -222,6 +231,7 @@ export function DashboardMap({
       dispatchTrailState({
         type: "toggle",
         deviceId,
+        currentDeviceTime: currentPosition?.device_time,
         currentServerTime: currentPosition?.server_time,
       });
     },
@@ -277,8 +287,8 @@ export function DashboardMap({
         : position.plate
           ? position.device_id
           : undefined,
-      status: getVehicleOperationalStatus(position),
-      lastSignalLabel: formatLastSignalRelative(position.server_time),
+      status: getVehicleOperationalStatus(position, now),
+      lastSignalLabel: formatLastSignalRelative(position.device_time || position.server_time, now),
       speedLabel: `${position.speed.toFixed(0)} km/h`,
     })
   );
@@ -310,6 +320,7 @@ export function DashboardMap({
       {preferencesReady ? (
         <TrackingMap
           positions={positions}
+          now={now}
           trails={trails}
           className="h-full w-full"
           selectedDeviceId={selectedDeviceId}
@@ -337,7 +348,8 @@ export function DashboardMap({
         <div className="absolute top-3 left-14 right-14 z-[1000] flex justify-center transition-[right,transform] duration-200 group-has-[.leaflet-control-layers-expanded]:right-40 lg:left-1/2 lg:right-auto lg:-translate-x-1/2 lg:group-has-[.leaflet-control-layers-expanded]:-translate-x-[calc(50%+80px)]">
           <DashboardFollowBar
             vehicle={followedVehicle}
-            status={getVehicleOperationalStatus(followedVehicle)}
+            status={getVehicleOperationalStatus(followedVehicle, now)}
+            now={now}
             onExitFollow={handleCancelFollow}
           />
         </div>
@@ -377,6 +389,11 @@ export function DashboardMap({
         <div className="rounded-2xl border border-white/10 bg-background/88 px-3 py-2 text-xs font-semibold text-foreground shadow-[0_20px_40px_-24px_rgba(0,0,0,0.75)] backdrop-blur-xl">
           <span className="font-bold text-primary">{positions.length}</span>{" "}
           {positions.length === 1 ? "veículo" : "veículos"}
+          {connectionStatus !== "live" ? (
+            <span className="ml-2 text-[10px] font-medium uppercase tracking-wide text-amber-300">
+              {connectionStatus === "recovering" ? "reconectando" : connectionStatus === "offline" ? "offline" : "conectando"}
+            </span>
+          ) : null}
         </div>
       </div>
 

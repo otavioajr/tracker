@@ -13,12 +13,14 @@ type TrailState = {
 
 export function activateTrailForVehicle({
   deviceId,
+  currentDeviceTime,
   currentServerTime,
   activeTrailDeviceIds,
   trailCursors,
   trails,
 }: {
   deviceId: string;
+  currentDeviceTime?: string;
   currentServerTime?: string;
 } & TrailState): TrailState {
   const nextActiveTrailDeviceIds = new Set(activeTrailDeviceIds);
@@ -28,7 +30,7 @@ export function activateTrailForVehicle({
     activeTrailDeviceIds: nextActiveTrailDeviceIds,
     trailCursors: {
       ...trailCursors,
-      [deviceId]: currentServerTime ?? "",
+      [deviceId]: currentDeviceTime ?? currentServerTime ?? "",
     },
     trails: {
       ...trails,
@@ -87,7 +89,8 @@ export function ingestRealtimeTrailPositions({
     }
 
     const currentCursor = nextTrailCursors[position.device_id] ?? "";
-    if (position.server_time <= currentCursor) {
+    const cursor = position.device_time || position.server_time;
+    if (cursor <= currentCursor) {
       continue;
     }
 
@@ -95,6 +98,7 @@ export function ingestRealtimeTrailPositions({
       latitude: position.latitude,
       longitude: position.longitude,
       server_time: position.server_time,
+      device_time: position.device_time,
     };
 
     if (!changed) {
@@ -107,7 +111,7 @@ export function ingestRealtimeTrailPositions({
     nextTrails[position.device_id] = [...previousTrail, nextPoint].slice(
       -pointLimit
     );
-    nextTrailCursors[position.device_id] = position.server_time;
+    nextTrailCursors[position.device_id] = cursor;
   }
 
   return {

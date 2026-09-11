@@ -2,16 +2,15 @@
 
 import { Marker } from "react-leaflet";
 import L from "leaflet";
+import { getVehicleOperationalStatus } from "@/lib/map/dashboard-map-utils";
 import type { VehiclePosition } from "./types";
 
-function getMarkerColor(position: VehiclePosition): string {
-  const lastSeen = new Date(position.server_time);
-  const minutesAgo = (Date.now() - lastSeen.getTime()) / 1000 / 60;
-
-  if (minutesAgo > 30) return "#ef4444"; // red — no signal
-  if (position.ignition && position.speed > 2) return "#22c55e"; // green — moving
-  if (position.ignition) return "#eab308"; // yellow — ignition on but stopped
-  return "#6b7280"; // gray — ignition off
+function getMarkerColor(position: VehiclePosition, now: number): string {
+  const status = getVehicleOperationalStatus(position, now);
+  if (status === "offline") return "#ef4444";
+  if (status === "moving") return "#22c55e";
+  if (position.ignition) return "#eab308";
+  return "#6b7280";
 }
 
 function createVehicleIcon(color: string, selected: boolean): L.DivIcon {
@@ -43,15 +42,17 @@ function createVehicleIcon(color: string, selected: boolean): L.DivIcon {
 
 export function VehicleMarker({
   position,
+  now,
   selected = false,
   onSelect,
 }: {
   position: VehiclePosition;
+  now: number;
   selected?: boolean;
   onSelect?: (deviceId: string) => void;
   onFollow?: (deviceId: string) => void;
 }) {
-  const color = getMarkerColor(position);
+  const color = getMarkerColor(position, now);
   const icon = createVehicleIcon(color, selected);
 
   return (
