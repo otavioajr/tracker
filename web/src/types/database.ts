@@ -222,6 +222,7 @@ export type Database = {
           ignition: boolean | null
           location: unknown
           satellites: number | null
+          received_at: string | null
           server_time: string
           speed: number | null
           tenant_id: string
@@ -235,6 +236,7 @@ export type Database = {
           ignition?: boolean | null
           location: unknown
           satellites?: number | null
+          received_at?: string | null
           server_time?: string
           speed?: number | null
           tenant_id: string
@@ -248,6 +250,7 @@ export type Database = {
           ignition?: boolean | null
           location?: unknown
           satellites?: number | null
+          received_at?: string | null
           server_time?: string
           speed?: number | null
           tenant_id?: string
@@ -313,6 +316,7 @@ export type Database = {
           location: unknown
           raw_data: Json | null
           satellites: number | null
+          received_at: string | null
           server_time: string
           speed: number | null
           tenant_id: string
@@ -328,6 +332,7 @@ export type Database = {
           location: unknown
           raw_data?: Json | null
           satellites?: number | null
+          received_at?: string | null
           server_time?: string
           speed?: number | null
           tenant_id: string
@@ -343,6 +348,7 @@ export type Database = {
           location?: unknown
           raw_data?: Json | null
           satellites?: number | null
+          received_at?: string | null
           server_time?: string
           speed?: number | null
           tenant_id?: string
@@ -361,6 +367,7 @@ export type Database = {
           location: unknown
           raw_data: Json | null
           satellites: number | null
+          received_at: string | null
           server_time: string
           speed: number | null
           tenant_id: string
@@ -376,6 +383,7 @@ export type Database = {
           location: unknown
           raw_data?: Json | null
           satellites?: number | null
+          received_at?: string | null
           server_time?: string
           speed?: number | null
           tenant_id: string
@@ -391,6 +399,7 @@ export type Database = {
           location?: unknown
           raw_data?: Json | null
           satellites?: number | null
+          received_at?: string | null
           server_time?: string
           speed?: number | null
           tenant_id?: string
@@ -409,6 +418,7 @@ export type Database = {
           location: unknown
           raw_data: Json | null
           satellites: number | null
+          received_at: string | null
           server_time: string
           speed: number | null
           tenant_id: string
@@ -424,6 +434,7 @@ export type Database = {
           location: unknown
           raw_data?: Json | null
           satellites?: number | null
+          received_at?: string | null
           server_time?: string
           speed?: number | null
           tenant_id: string
@@ -439,6 +450,7 @@ export type Database = {
           location?: unknown
           raw_data?: Json | null
           satellites?: number | null
+          received_at?: string | null
           server_time?: string
           speed?: number | null
           tenant_id?: string

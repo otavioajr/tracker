@@ -185,11 +185,34 @@ func TestSuntechReadFrameWithoutTrailingNewline(t *testing.T) {
 	input := compactSTTMessage()
 	reader := bufio.NewReader(strings.NewReader(input))
 
+	// An otherwise valid payload without a terminator is still incomplete.
 	frame, err := p.ReadFrame(reader)
-	if err != nil {
-		t.Fatalf("ReadFrame error: %v", err)
+	if err == nil || frame != nil {
+		t.Fatalf("unterminated frame = %q, err = %v", frame, err)
 	}
-	if string(frame) != input {
-		t.Fatalf("ReadFrame = %q, want %q", string(frame), input)
+}
+
+func TestSuntechFrameBoundaries(t *testing.T) {
+	p := NewSuntechParser()
+	for _, delimiter := range []string{"\r", "\n", "\r\n"} {
+		reader := bufio.NewReader(strings.NewReader(delimiter + strings.Repeat(strings.Repeat("x", suntechMaxFrameSize)+delimiter, 3)))
+		for i := 0; i < 3; i++ {
+			frame, err := p.ReadFrame(reader)
+			if err != nil || len(frame) != suntechMaxFrameSize {
+				t.Fatalf("delimiter %q frame %d: len=%d err=%v", delimiter, i, len(frame), err)
+			}
+		}
+	}
+	reader := bufio.NewReader(strings.NewReader(strings.Repeat("x", suntechMaxFrameSize+1) + "\r"))
+	if frame, err := p.ReadFrame(reader); err == nil || frame != nil {
+		t.Fatalf("oversized frame accepted: %d, %v", len(frame), err)
+	}
+}
+
+func TestSuntechParseRejectsConcatenation(t *testing.T) {
+	for _, delimiter := range []string{"\r", "\n", "\r\n"} {
+		if _, err := NewSuntechParser().Parse([]byte(compactSTTMessage()+delimiter+compactSTTMessage()), &Session{}); err == nil {
+			t.Fatalf("accepted internal delimiter %q", delimiter)
+		}
 	}
 }

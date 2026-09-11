@@ -1,12 +1,13 @@
 // @vitest-environment jsdom
 
 import React from "react";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { getDashboardMapUiPreferencesStorageKey } from "@/lib/map/dashboard-map-preferences";
 
-const { mockUseRealtimePositions } = vi.hoisted(() => ({
+const { mockUseRealtimePositions, realtimeState } = vi.hoisted(() => ({
+  realtimeState: { connectionStatus: "live" },
   mockUseRealtimePositions: vi.fn(),
 }));
 
@@ -65,7 +66,7 @@ vi.mock("next/dynamic", () => ({
 }));
 
 vi.mock("@/lib/hooks/use-realtime-positions", () => ({
-  useRealtimePositions: (positions: unknown[]) => mockUseRealtimePositions(positions),
+  useRealtimePositionsState: (positions: unknown[]) => ({ positions: mockUseRealtimePositions(positions), connectionStatus: realtimeState.connectionStatus }),
 }));
 
 import { DashboardMap } from "./dashboard-map";
@@ -104,6 +105,7 @@ const newerPositions = [
     ...positions[0],
     latitude: -23.5008,
     longitude: -46.6008,
+    device_time: "2026-04-04T15:06:00.000Z",
     server_time: "2026-04-04T15:06:00.000Z",
   },
   positions[1],
@@ -133,15 +135,16 @@ function createLocalStorageMock() {
 
 describe("DashboardMap", () => {
   beforeEach(() => {
+    realtimeState.connectionStatus = "live";
     vi.useFakeTimers({ shouldAdvanceTime: true });
-    vi.setSystemTime(new Date("2026-04-04T15:05:00.000Z"));
+    vi.setSystemTime(new Date("2026-04-04T15:03:00.000Z"));
     Object.defineProperty(window, "localStorage", {
       value: createLocalStorageMock(),
       configurable: true,
       writable: true,
     });
     mockUseRealtimePositions.mockImplementation((incoming: typeof positions) =>
-      incoming.map((position) => ({ ...position }))
+      incoming // Consultas sem mudanças preservam a referência do hook real.
     );
   });
 
@@ -174,6 +177,35 @@ describe("DashboardMap", () => {
 
     fireEvent.click(matches[0]);
   }
+
+  it.each([
+    ["connecting", "Conectando atualização ao vivo…"],
+    ["recovering", "Atualização ao vivo indisponível; tentando recuperar."],
+    ["offline", "Navegador sem conexão; exibindo últimas posições."],
+  ])("distinguishes browser %s from vehicle age", (status, message) => {
+    realtimeState.connectionStatus = status;
+    renderDashboardMap();
+    expect(screen.getByRole("status").textContent).toBe(message);
+    expect(screen.queryByText("Sem sinal")).toBeNull();
+    expect(screen.getAllByRole("button", { name: "Selecionar Truck 01" }).length).toBeGreaterThan(0);
+  });
+
+  it("ages without events, updates follow and filters, and does not duplicate trails", () => {
+    vi.setSystemTime(new Date("2026-04-04T15:00:00.000Z"));
+    const current = [{ ...positions[0], device_time: "2026-04-04T14:55:10.000Z" }];
+    renderDashboardMap(current);
+    fireEvent.click(screen.getAllByRole("button", { name: "Selecionar Truck 01" })[0]);
+    fireEvent.click(screen.getAllByRole("switch", { name: "Mostrar rastro do Truck 01" })[0]);
+    expect(screen.queryByText("Seguindo última posição")).toBeNull();
+    act(() => { vi.advanceTimersByTime(15_000); });
+    expect(screen.getByText("Seguindo última posição")).toBeTruthy();
+    expect(screen.getAllByText("Posição desatualizada").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Última leitura: 42 km/h").length).toBeGreaterThan(0);
+    expect(screen.getByText("trail-points:truck-1:0")).toBeTruthy();
+    fireEvent.click(screen.getAllByRole("button", { name: "Em movimento" })[0]);
+    expect(screen.queryByRole("button", { name: "Selecionar Truck 01" })).toBeNull();
+    expect(screen.getByText("followed:truck-1")).toBeTruthy();
+  });
 
   it("selects from the list and enters follow mode", async () => {
     renderDashboardMap();

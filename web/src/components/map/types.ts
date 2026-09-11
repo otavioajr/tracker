@@ -8,6 +8,8 @@ export type VehiclePosition = {
   ignition: boolean;
   device_time: string;
   server_time: string;
+  // Ausente nas posições anteriores à captura de recepção pelo gateway.
+  received_at?: string | null;
   plate?: string;
   vehicle_name?: string;
   vehicle_model?: string;

@@ -3,7 +3,7 @@
 import { ArrowUpRight, LocateFixed, Power } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { DASHBOARD_STATUS_META, getVehicleDisplayLabel } from "@/lib/map/dashboard-map-utils";
+import { DASHBOARD_STATUS_META, formatLastSignalRelative, getVehicleDisplayLabel } from "@/lib/map/dashboard-map-utils";
 import { cn } from "@/lib/utils";
 
 import type { VehicleOperationalStatus, VehiclePosition } from "./types";
@@ -11,12 +11,14 @@ import type { VehicleOperationalStatus, VehiclePosition } from "./types";
 type DashboardFollowBarProps = {
   vehicle: VehiclePosition;
   status: VehicleOperationalStatus;
+  now: number;
   onExitFollow: () => void;
 };
 
 export function DashboardFollowBar({
   vehicle,
   status,
+  now,
   onExitFollow,
 }: DashboardFollowBarProps) {
   const statusMeta = DASHBOARD_STATUS_META[status];
@@ -28,9 +30,9 @@ export function DashboardFollowBar({
       </div>
       <div className="min-w-0 flex-1">
         <p className="text-[9px] font-semibold uppercase tracking-[0.16em] text-muted-foreground lg:text-[11px] lg:tracking-[0.18em]">
-          Seguindo agora
+          {status === "offline" ? "Seguindo última posição" : "Seguindo agora"}
         </p>
-        <div className="mt-0.5 flex items-center gap-1.5 lg:mt-1 lg:gap-2">
+        <div className="mt-0.5 flex flex-wrap items-center gap-1.5 lg:mt-1 lg:gap-2">
           <p className="truncate text-xs font-semibold text-foreground lg:text-sm">
             {getVehicleDisplayLabel(vehicle)}
           </p>
@@ -45,7 +47,12 @@ export function DashboardFollowBar({
             {statusMeta.label}
           </span>
         </div>
-        <div className="mt-0.5 flex items-center gap-2 text-[10px] text-muted-foreground lg:mt-1 lg:gap-3 lg:text-xs">
+        {/* Atraso qualifica velocidade e ignição, sem inferir o estado atual. */}
+        <p className="mt-1 text-[10px] text-muted-foreground lg:text-xs">
+          Última posição há {formatLastSignalRelative(vehicle.device_time, now)}
+          {status === "offline" ? " · Última leitura:" : ""}
+        </p>
+        <div className="mt-0.5 flex flex-wrap items-center gap-2 text-[10px] text-muted-foreground lg:mt-1 lg:gap-3 lg:text-xs">
           <span className="inline-flex items-center gap-1">
             <ArrowUpRight className="size-2.5 lg:size-3" />
             <span className="font-mono tabular-nums text-foreground">

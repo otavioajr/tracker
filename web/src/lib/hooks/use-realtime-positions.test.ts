@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   mergeRealtimeVehiclePosition,
   normalizeRealtimeLocation,
-} from "./use-realtime-positions";
+} from "@/lib/map/position-data";
 import type { VehiclePosition } from "@/lib/actions/positions";
 
 describe("use-realtime-positions helpers", () => {
@@ -82,8 +82,8 @@ describe("use-realtime-positions helpers", () => {
         speed: 42,
         heading: 15,
         ignition: true,
-        device_time: "2026-04-07T12:01:00.000Z",
-        server_time: "2026-04-07T12:01:00.000Z",
+        device_time: "2026-04-07T11:59:00.000Z",
+        server_time: "2026-04-07T12:06:00.000Z",
       })
     ).toBe(existing);
   });

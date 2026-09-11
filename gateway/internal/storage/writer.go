@@ -204,6 +204,13 @@ func buildBatchInsert(positions []*protocol.Position, devices map[string]DeviceI
 	var values []string
 	var args []any
 	paramIdx := 1
+	// Only identical retransmissions within this batch are suppressed.
+	type frameKey struct {
+		deviceID   string
+		deviceTime time.Time
+		raw        string
+	}
+	seen := make(map[frameKey]struct{}, len(positions))
 
 	for _, pos := range positions {
 		info, ok := devices[pos.IMEI]
@@ -211,21 +218,31 @@ func buildBatchInsert(positions []*protocol.Position, devices map[string]DeviceI
 			continue
 		}
 
+		key := frameKey{info.DeviceID, pos.DeviceTime.UTC(), pos.RawData}
+		if _, duplicate := seen[key]; duplicate {
+			continue
+		}
+		seen[key] = struct{}{}
+		// Old disk records have no reception timestamp; never invent one.
+		var receivedAt any
+		if !pos.ReceivedAt.IsZero() {
+			receivedAt = pos.ReceivedAt
+		}
 		rawJSON, _ := json.Marshal(map[string]string{"raw": pos.RawData})
 
 		values = append(values, fmt.Sprintf(
-			"($%d, $%d, $%d, ST_SetSRID(ST_MakePoint($%d, $%d), 4326), $%d, $%d, $%d, $%d, $%d, $%d::jsonb, $%d, now())",
+			"($%d, $%d, $%d, ST_SetSRID(ST_MakePoint($%d, $%d), 4326), $%d, $%d, $%d, $%d, $%d, $%d::jsonb, $%d, now(), $%d)",
 			paramIdx, paramIdx+1, paramIdx+2, paramIdx+3, paramIdx+4,
 			paramIdx+5, paramIdx+6, paramIdx+7, paramIdx+8,
-			paramIdx+9, paramIdx+10, paramIdx+11,
+			paramIdx+9, paramIdx+10, paramIdx+11, paramIdx+12,
 		))
 		args = append(args,
 			info.DeviceID, info.TenantID, info.VehicleID,
 			pos.Longitude, pos.Latitude,
 			pos.Speed, pos.Heading, pos.Ignition, pos.Altitude,
-			pos.Satellites, string(rawJSON), pos.DeviceTime,
+			pos.Satellites, string(rawJSON), pos.DeviceTime, receivedAt,
 		)
-		paramIdx += 12
+		paramIdx += 13
 	}
 
 	if len(values) == 0 {
@@ -233,7 +250,7 @@ func buildBatchInsert(positions []*protocol.Position, devices map[string]DeviceI
 	}
 
 	sql := fmt.Sprintf(
-		"INSERT INTO positions (device_id, tenant_id, vehicle_id, location, speed, heading, ignition, altitude, satellites, raw_data, device_time, server_time) VALUES %s",
+		"INSERT INTO positions (device_id, tenant_id, vehicle_id, location, speed, heading, ignition, altitude, satellites, raw_data, device_time, server_time, received_at) VALUES %s",
 		strings.Join(values, ", "),
 	)
 

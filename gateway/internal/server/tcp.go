@@ -56,16 +56,22 @@ type Config struct {
 
 // Server is a TCP server that receives GPS device data.
 type Server struct {
-	config     Config
-	registry   *protocol.Registry
-	detector   protocol.Detector
-	handler    OutcomeHandler
-	listener   net.Listener
-	logger     *slog.Logger
-	mu         sync.RWMutex
-	activeConn atomic.Int64
-	wg         sync.WaitGroup
-	quit       chan struct{}
+	config      Config
+	registry    *protocol.Registry
+	detector    protocol.Detector
+	handler     OutcomeHandler
+	listener    net.Listener
+	connections map[net.Conn]struct{}
+	stopOnce    sync.Once
+	logger      *slog.Logger
+	mu          sync.RWMutex
+	activeConn  atomic.Int64
+	wg          sync.WaitGroup
+	quit        chan struct{}
+	// Command queues share a lock; only the connection loop writes to its socket.
+	commandMu       sync.Mutex
+	commands        map[string][]queuedCommand
+	commandSequence atomic.Uint32
 }
 
 // New creates a TCP server.
@@ -84,12 +90,14 @@ func New(cfg Config, registry *protocol.Registry, detector protocol.Detector, ha
 	}
 
 	return &Server{
-		config:   cfg,
-		registry: registry,
-		detector: detector,
-		handler:  handler,
-		logger:   cfg.Logger,
-		quit:     make(chan struct{}),
+		config:      cfg,
+		registry:    registry,
+		detector:    detector,
+		handler:     handler,
+		logger:      cfg.Logger,
+		quit:        make(chan struct{}),
+		commands:    make(map[string][]queuedCommand),
+		connections: make(map[net.Conn]struct{}),
 	}
 }
 
@@ -100,6 +108,13 @@ func (s *Server) Start() error {
 		return fmt.Errorf("server: failed to listen: %w", err)
 	}
 	s.mu.Lock()
+	select {
+	case <-s.quit:
+		s.mu.Unlock()
+		ln.Close()
+		return nil
+	default:
+	}
 	s.listener = ln
 	s.mu.Unlock()
 	s.logger.Info("TCP server listening", "addr", ln.Addr().String())
@@ -116,22 +131,43 @@ func (s *Server) Start() error {
 			}
 		}
 
+		// Serialize registration with shutdown so no accepted socket escapes cleanup.
+		s.mu.Lock()
+		select {
+		case <-s.quit:
+			s.mu.Unlock()
+			conn.Close()
+			return nil
+		default:
+		}
+		s.connections[conn] = struct{}{}
 		s.wg.Add(1)
 		s.activeConn.Add(1)
+		s.mu.Unlock()
 		go s.handleConnection(conn)
 	}
 }
 
 // Stop gracefully shuts down the server.
 func (s *Server) Stop() {
-	close(s.quit)
-	s.mu.Lock()
-	ln := s.listener
-	s.listener = nil
-	s.mu.Unlock()
-	if ln != nil {
-		ln.Close()
-	}
+	s.stopOnce.Do(func() {
+		s.mu.Lock()
+		close(s.quit)
+		ln := s.listener
+		s.listener = nil
+		connections := make([]net.Conn, 0, len(s.connections))
+		for conn := range s.connections {
+			connections = append(connections, conn)
+		}
+		s.mu.Unlock()
+		if ln != nil {
+			ln.Close()
+		}
+		// Unblock idle reads and command writes before waiting for their workers.
+		for _, conn := range connections {
+			conn.Close()
+		}
+	})
 	s.wg.Wait()
 }
 
@@ -153,6 +189,9 @@ func (s *Server) ActiveConnections() int64 {
 func (s *Server) handleConnection(conn net.Conn) {
 	defer func() {
 		conn.Close()
+		s.mu.Lock()
+		delete(s.connections, conn)
+		s.mu.Unlock()
 		s.activeConn.Add(-1)
 		s.wg.Done()
 	}()
@@ -224,6 +263,8 @@ func (s *Server) handleConnection(conn net.Conn) {
 		conn.SetDeadline(time.Now().Add(s.config.IdleTimeout))
 
 		frame, err := parser.ReadFrame(reader)
+		// Capture reception before parsing, ACK and storage queues can delay it.
+		receivedAt := time.Now().UTC()
 		if err != nil {
 			if err != io.EOF {
 				s.logger.Debug("connection closed", "remote", remoteAddr, "error", err)
@@ -256,23 +297,31 @@ func (s *Server) handleConnection(conn net.Conn) {
 			continue
 		}
 
+		// Preserve a valid reading even if an ACK or later command write fails.
+		if pos != nil {
+			pos.ReceivedAt = receivedAt
+			pos.RemoteAddr = remoteAddr
+			if pos.IMEI == "" && session.IMEI != "" {
+				pos.IMEI = session.IMEI
+			}
+			s.handler.HandlePosition(pos, detection.Family, detection.Variant)
+		}
+
 		if ack := parser.ACK(frame, &session); ack != nil {
-			conn.Write(ack)
+			// Do not send commands after a failed or partial protocol acknowledgement.
+			n, err := conn.Write(ack)
+			if err != nil || n != len(ack) {
+				return
+			}
 		}
 
-		// nil position means non-data packet (login, heartbeat) — skip.
-		if pos == nil {
-			continue
+		// Legacy commands use GT06 framing only, including login/heartbeat delivery.
+		if detection.ParserName == "gt06" && session.IMEI != "" {
+			if err := s.flushCommands(conn, session.IMEI); err != nil {
+				return
+			}
 		}
 
-		pos.RemoteAddr = remoteAddr
-
-		// Use session IMEI if parser didn't set it on the position.
-		if pos.IMEI == "" && session.IMEI != "" {
-			pos.IMEI = session.IMEI
-		}
-
-		s.handler.HandlePosition(pos, detection.Family, detection.Variant)
 	}
 }
 

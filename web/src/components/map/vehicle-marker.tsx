@@ -1,14 +1,13 @@
 "use client";
 
-import { Marker } from "react-leaflet";
+import { Marker, Tooltip } from "react-leaflet";
+import { DASHBOARD_STATUS_META, formatLastSignalRelative, getVehicleDisplayLabel, getVehicleOperationalStatus } from "@/lib/map/dashboard-map-utils";
 import L from "leaflet";
 import type { VehiclePosition } from "./types";
 
-function getMarkerColor(position: VehiclePosition): string {
-  const lastSeen = new Date(position.server_time);
-  const minutesAgo = (Date.now() - lastSeen.getTime()) / 1000 / 60;
-
-  if (minutesAgo > 30) return "#ef4444"; // red — no signal
+function getMarkerColor(position: VehiclePosition, now: number): string {
+  // Mesma classificação da lista; vermelho não significa ausência de sinal.
+  if (getVehicleOperationalStatus(position, now) === "offline") return "#ef4444";
   if (position.ignition && position.speed > 2) return "#22c55e"; // green — moving
   if (position.ignition) return "#eab308"; // yellow — ignition on but stopped
   return "#6b7280"; // gray — ignition off
@@ -43,21 +42,27 @@ function createVehicleIcon(color: string, selected: boolean): L.DivIcon {
 
 export function VehicleMarker({
   position,
+  now,
   selected = false,
   onSelect,
 }: {
   position: VehiclePosition;
+  now: number;
   selected?: boolean;
   onSelect?: (deviceId: string) => void;
   onFollow?: (deviceId: string) => void;
 }) {
-  const color = getMarkerColor(position);
+  const status = getVehicleOperationalStatus(position, now);
+  const label = `${getVehicleDisplayLabel(position)} — ${DASHBOARD_STATUS_META[status].label}. Última posição há ${formatLastSignalRelative(position.device_time, now)}`;
+  const color = getMarkerColor(position, now);
   const icon = createVehicleIcon(color, selected);
 
   return (
     <Marker
       position={[position.latitude, position.longitude]}
       icon={icon}
+      title={label}
+      alt={label}
       eventHandlers={
         onSelect
           ? {
@@ -65,6 +70,8 @@ export function VehicleMarker({
             }
           : undefined
       }
-    />
+    >
+      <Tooltip>{label}</Tooltip>
+    </Marker>
   );
 }

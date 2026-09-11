@@ -10,7 +10,7 @@ describe("dashboard-trails", () => {
   it("starts empty and stores the current cursor when a trail is activated", () => {
     const result = activateTrailForVehicle({
       deviceId: "truck-1",
-      currentServerTime: "2026-04-07T12:00:00.000Z",
+      currentDeviceTime: "2026-04-07T12:00:00.000Z",
       activeTrailDeviceIds: new Set<string>(),
       trailCursors: {},
       trails: {},
@@ -125,6 +125,19 @@ describe("dashboard-trails", () => {
 
     expect(result.trailCursors).toBe(trailCursors);
     expect(result.trails).toBe(trails);
+  });
+
+  it("ignores older measurements received later, including equivalent timezone timestamps", () => {
+    const trailCursors = { "truck-1": "2026-04-07T12:01:00.000Z" };
+    const trails = {};
+    for (const device_time of ["2026-04-07T12:00:00Z", "2026-04-07T09:01:00-03:00"]) {
+      const result = ingestRealtimeTrailPositions({
+        positions: [{ device_id: "truck-1", latitude: -23.5, longitude: -46.6, speed: 42, heading: 0, ignition: true, device_time, server_time: "2026-04-07T15:00:00Z" }],
+        activeTrailDeviceIds: new Set(["truck-1"]), trailCursors, trails,
+      });
+      expect(result.trailCursors).toBe(trailCursors);
+      expect(result.trails).toBe(trails);
+    }
   });
 
   it("clears only the requested vehicle when a trail is disabled", () => {

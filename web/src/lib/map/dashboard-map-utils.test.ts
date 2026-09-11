@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   filterDashboardVehicles,
+  isPositionStale,
+  POSITION_STALE_AFTER_MS,
   formatLastSignalRelative,
   getVehicleDisplayLabel,
   getVehicleOperationalStatus,
@@ -22,7 +24,7 @@ describe("dashboard-map-utils", () => {
       getVehicleOperationalStatus({
         ignition: true,
         speed: 38,
-        server_time: now.toISOString(),
+        device_time: now.toISOString(),
       })
     ).toBe("moving");
 
@@ -30,7 +32,7 @@ describe("dashboard-map-utils", () => {
       getVehicleOperationalStatus({
         ignition: true,
         speed: 0,
-        server_time: now.toISOString(),
+        device_time: now.toISOString(),
       })
     ).toBe("stopped");
 
@@ -38,9 +40,17 @@ describe("dashboard-map-utils", () => {
       getVehicleOperationalStatus({
         ignition: false,
         speed: 0,
-        server_time: "2026-04-04T14:20:00.000Z",
+        device_time: "2026-04-04T14:20:00.000Z",
       })
     ).toBe("offline");
+  });
+
+  it("uses measurement age with a strict five-minute threshold", () => {
+    const measuredAt = Date.parse("2026-04-04T15:00:00Z");
+    expect(isPositionStale(new Date(measuredAt).toISOString(), measuredAt + POSITION_STALE_AFTER_MS)).toBe(false);
+    expect(isPositionStale(new Date(measuredAt).toISOString(), measuredAt + POSITION_STALE_AFTER_MS + 1)).toBe(true);
+    expect(isPositionStale("invalid", measuredAt)).toBe(true);
+    expect(getVehicleOperationalStatus({ ignition: true, speed: 2, device_time: new Date(measuredAt).toISOString() }, measuredAt)).toBe("stopped");
   });
 
   it("prefers vehicle name, then plate, then device id for display", () => {
@@ -70,7 +80,7 @@ describe("dashboard-map-utils", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-04-04T15:00:00.000Z"));
 
-    expect(formatLastSignalRelative("2026-04-04T15:00:00.000Z")).toBe("agora");
+    expect(formatLastSignalRelative("2026-04-04T15:00:00.000Z")).toBe("0 s");
     expect(formatLastSignalRelative("2026-04-04T14:57:00.000Z")).toBe("3 min");
     expect(formatLastSignalRelative("2026-04-04T13:35:00.000Z")).toBe("1h 25m");
   });
@@ -86,7 +96,7 @@ describe("dashboard-map-utils", () => {
         plate: "ABC1D23",
         ignition: true,
         speed: 42,
-        server_time: "2026-04-04T14:59:00.000Z",
+        device_time: "2026-04-04T14:59:00.000Z",
       },
       {
         device_id: "van-2",
@@ -94,7 +104,7 @@ describe("dashboard-map-utils", () => {
         plate: "XYZ9K88",
         ignition: true,
         speed: 0,
-        server_time: "2026-04-04T14:58:00.000Z",
+        device_time: "2026-04-04T14:58:00.000Z",
       },
       {
         device_id: "car-3",
@@ -102,7 +112,7 @@ describe("dashboard-map-utils", () => {
         plate: "HJK5L90",
         ignition: false,
         speed: 0,
-        server_time: "2026-04-04T13:00:00.000Z",
+        device_time: "2026-04-04T13:00:00.000Z",
       },
     ];
 

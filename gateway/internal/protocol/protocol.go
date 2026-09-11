@@ -15,7 +15,8 @@ type Position struct {
 	Altitude   float64
 	Satellites int
 	Ignition   bool
-	Battery    float64 // volts
+	Battery    float64   // volts
+	ReceivedAt time.Time // frame completion time; zero for legacy buffered records
 	DeviceTime time.Time
 	RawData    string // original message for debugging
 	RemoteAddr string // client IP:port, set by TCP handler

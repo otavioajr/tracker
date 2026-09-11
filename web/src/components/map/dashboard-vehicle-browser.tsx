@@ -14,7 +14,8 @@ const FILTER_OPTIONS: { label: string; value: DashboardVehicleFilter }[] = [
   { label: "Todos", value: "all" },
   { label: "Em movimento", value: "moving" },
   { label: "Parados", value: "stopped" },
-  { label: "Sem sinal", value: "offline" },
+  // Preserva a chave de filtro salva sem afirmar desconexão do equipamento.
+  { label: "Desatualizados", value: "offline" },
 ];
 
 type DashboardVehicleBrowserProps = {

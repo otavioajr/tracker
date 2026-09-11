@@ -3,8 +3,11 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
+	"net"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -12,6 +15,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/otavioajr/tracker/gateway/internal/alerts"
+	"github.com/otavioajr/tracker/gateway/internal/buildinfo"
 	"github.com/otavioajr/tracker/gateway/internal/config"
 	"github.com/otavioajr/tracker/gateway/internal/metrics"
 	"github.com/otavioajr/tracker/gateway/internal/protocol"
@@ -20,8 +24,17 @@ import (
 )
 
 func main() {
+	// Version inspection must not open database or tracker connections.
+	if handled, err := writeVersion(os.Args[1:], os.Stdout); handled {
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		return
+	}
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))
 	slog.SetDefault(logger)
+	logger.Info("gateway build", "build", buildinfo.Current())
 
 	cfg, err := config.Load()
 	if err != nil {
@@ -103,6 +116,19 @@ func main() {
 		Logger: logger,
 	}, registry, protocol.NewDefaultDetector(), gw)
 
+	// Bind before accepting trackers: a missing command endpoint must fail startup visibly.
+	commandServer, err := server.NewCommandHTTPServer(cfg.CommandAddr, cfg.CommandToken, tcpServer)
+	if err != nil {
+		logger.Error("invalid command server configuration", "error", err)
+		os.Exit(1)
+	}
+	commandListener, err := net.Listen("tcp", cfg.CommandAddr)
+	if err != nil {
+		logger.Error("failed to listen for commands", "error", err)
+		os.Exit(1)
+	}
+	defer commandListener.Close()
+
 	// Update metrics to use real connection count
 	m.ActiveConnections = tcpServer.ActiveConnections
 
@@ -113,12 +139,17 @@ func main() {
 	metricsServer := metrics.StartServer(fmt.Sprintf(":%d", cfg.MetricsPort), m, logger)
 
 	// Start TCP server in goroutine
-	serverErrCh := make(chan error, 1)
+	serverErrCh := make(chan error, 2)
 	go func() {
 		serverErrCh <- tcpServer.Start()
 	}()
+	go func() {
+		if err := commandServer.Serve(commandListener); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			serverErrCh <- fmt.Errorf("command server: %w", err)
+		}
+	}()
 
-	logger.Info("tracker gateway started", "tcp_port", cfg.TCPPort, "metrics_port", cfg.MetricsPort)
+	logger.Info("tracker gateway started", "tcp_port", cfg.TCPPort, "metrics_port", cfg.MetricsPort, "command_addr", cfg.CommandAddr)
 
 	// Wait for shutdown signal
 	sigCh := make(chan os.Signal, 1)
@@ -126,7 +157,7 @@ func main() {
 	select {
 	case err := <-serverErrCh:
 		if err != nil {
-			logger.Error("TCP server stopped unexpectedly", "error", err)
+			logger.Error("gateway server stopped unexpectedly", "error", err)
 		}
 	case sig := <-sigCh:
 		logger.Info("shutdown signal received", "signal", sig)
@@ -134,6 +165,7 @@ func main() {
 
 	logger.Info("shutting down...")
 	cancel()
+	commandServer.Close()
 	tcpServer.Stop()
 	metricsServer.Close()
 	writer.Close()

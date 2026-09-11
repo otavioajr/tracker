@@ -40,7 +40,8 @@ export function DashboardVehicleListItem({
         onClick={onSelect}
         className="group flex w-full flex-col gap-2 px-3 py-3 text-left"
       >
-        <div className="flex items-start justify-between gap-3">
+        {/* O aviso textual pode quebrar linha em telas estreitas. */}
+        <div className="flex flex-wrap items-start justify-between gap-2">
           <div className="min-w-0">
             <p className="truncate text-sm font-semibold">{vehicle.displayLabel}</p>
             {vehicle.secondaryLabel ? (

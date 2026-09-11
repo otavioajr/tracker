@@ -27,6 +27,7 @@ describe("DashboardFollowBar", () => {
           plate: "ABC1D23",
           vehicle_name: "Truck 01",
         }}
+        now={Date.parse("2026-04-04T15:00:00Z")}
         status="moving"
         onExitFollow={handleExitFollow}
       />

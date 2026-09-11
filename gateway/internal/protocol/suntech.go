@@ -35,21 +35,37 @@ func (p *SuntechParser) Identify(data []byte) bool {
 		strings.HasPrefix(s, suntechPrefix34)
 }
 
+// Generous per-frame cap for the supported legacy and compact ASCII variants.
+const suntechMaxFrameSize = 4096
+
 func (p *SuntechParser) ReadFrame(reader *bufio.Reader) ([]byte, error) {
-	line, err := reader.ReadBytes('\n')
-	if err != nil {
-		if len(line) == 0 {
+	frame := make([]byte, 0, 256)
+	for {
+		b, err := reader.ReadByte()
+		if err != nil {
+			// EOF and timeout never promote an unterminated fragment.
 			return nil, err
 		}
+		if b == '\r' || b == '\n' {
+			if len(frame) == 0 {
+				continue
+			}
+			// Do not peek after CR: the optional LF may arrive much later.
+			return frame, nil
+		}
+		if len(frame) == suntechMaxFrameSize {
+			return nil, fmt.Errorf("suntech: frame exceeds %d bytes", suntechMaxFrameSize)
+		}
+		frame = append(frame, b)
 	}
-	for len(line) > 0 && (line[len(line)-1] == '\n' || line[len(line)-1] == '\r') {
-		line = line[:len(line)-1]
-	}
-	return line, nil
 }
 
 func (p *SuntechParser) Parse(data []byte, session *Session) (*Position, error) {
 	raw := strings.TrimRight(string(data), "\r\n")
+	// Direct callers must not bypass framing by concatenating messages.
+	if strings.ContainsAny(raw, "\r\n") {
+		return nil, fmt.Errorf("suntech: internal frame delimiter")
+	}
 	fields := strings.Split(raw, ";")
 
 	isCompact := strings.HasPrefix(raw, suntechPrefixSTT)

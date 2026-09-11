@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useReducer, useState } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useState } from "react";
 import dynamic from "next/dynamic";
 import { Compass, MapPinned, PanelRightClose } from "lucide-react";
 
@@ -18,7 +18,7 @@ import type {
 import type { TrackingMapProps } from "@/components/map/tracking-map";
 import type { GeofenceRow } from "@/lib/geofences/types";
 import { Button } from "@/components/ui/button";
-import { useRealtimePositions } from "@/lib/hooks/use-realtime-positions";
+import { useRealtimePositionsState } from "@/lib/hooks/use-realtime-positions";
 import {
   activateTrailForVehicle,
   clearTrailForVehicle,
@@ -38,6 +38,7 @@ import {
   formatLastSignalRelative,
   getVehicleDisplayLabel,
   getVehicleOperationalStatus,
+  POSITION_CLOCK_INTERVAL_MS,
 } from "@/lib/map/dashboard-map-utils";
 import { isDashboardMapRotationEnabled } from "@/lib/map/map-rotation-feature";
 
@@ -56,7 +57,7 @@ type DashboardTrailAction =
   | {
       type: "toggle";
       deviceId: string;
-      currentServerTime?: string;
+      currentDeviceTime?: string;
     }
   | {
       type: "ingest";
@@ -87,7 +88,7 @@ function dashboardTrailStateReducer(
 
     return activateTrailForVehicle({
       deviceId: action.deviceId,
-      currentServerTime: action.currentServerTime,
+      currentDeviceTime: action.currentDeviceTime,
       activeTrailDeviceIds: prev.activeTrailDeviceIds,
       trailCursors: prev.trailCursors,
       trails: prev.trails,
@@ -138,7 +139,13 @@ export function DashboardMap({
   initialGeofences,
   userId,
 }: DashboardMapProps) {
-  const positions = useRealtimePositions(initialPositions);
+  const { positions, connectionStatus } = useRealtimePositionsState(initialPositions);
+  const [now, setNow] = useState(() => Date.now());
+  // Um relógio para toda a UI; não participa da ingestão nem da câmera.
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), POSITION_CLOCK_INTERVAL_MS);
+    return () => window.clearInterval(timer);
+  }, []);
   const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(null);
   const [followedDeviceId, setFollowedDeviceId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -175,10 +182,11 @@ export function DashboardMap({
     }
 
     const preferences = readDashboardMapUiPreferences(userId);
+    // Reinicia na medição atual: cursores legados de gravação não são reutilizados.
     const hydratedTrailCursors = Object.fromEntries(
       preferences.activeTrailDeviceIds.map((deviceId) => [
         deviceId,
-        positions.find((position) => position.device_id === deviceId)?.server_time ?? "",
+        positions.find((position) => position.device_id === deviceId)?.device_time ?? "",
       ])
     );
 
@@ -222,7 +230,7 @@ export function DashboardMap({
       dispatchTrailState({
         type: "toggle",
         deviceId,
-        currentServerTime: currentPosition?.server_time,
+        currentDeviceTime: currentPosition?.device_time,
       });
     },
     [positions]
@@ -266,6 +274,7 @@ export function DashboardMap({
   const filteredPositions = filterDashboardVehicles(positions, {
     query: searchQuery,
     status: statusFilter,
+    now,
   });
 
   const vehicleEntries: DashboardVehicleListEntry[] = filteredPositions.map(
@@ -277,9 +286,9 @@ export function DashboardMap({
         : position.plate
           ? position.device_id
           : undefined,
-      status: getVehicleOperationalStatus(position),
-      lastSignalLabel: formatLastSignalRelative(position.server_time),
-      speedLabel: `${position.speed.toFixed(0)} km/h`,
+      status: getVehicleOperationalStatus(position, now),
+      lastSignalLabel: `Última posição há ${formatLastSignalRelative(position.device_time, now)}`,
+      speedLabel: `${getVehicleOperationalStatus(position, now) === "offline" ? "Última leitura: " : ""}${position.speed.toFixed(0)} km/h`,
     })
   );
 
@@ -298,10 +307,11 @@ export function DashboardMap({
   const mobileTitle = selectedVehicle
     ? getVehicleDisplayLabel(selectedVehicle)
     : `${positions.length} ${positions.length === 1 ? "veículo" : "veículos"}`;
-  const trails = Array.from(trailState.activeTrailDeviceIds).map((deviceId) => ({
+  // Ticks de idade não recriam linhas Leaflet nem seus pontos.
+  const trails = useMemo(() => Array.from(trailState.activeTrailDeviceIds).map((deviceId) => ({
     deviceId,
     points: trailState.trails[deviceId] ?? [],
-  }));
+  })), [trailState.activeTrailDeviceIds, trailState.trails]);
 
   const preferencesReady = !userId || hydratedPreferencesUserId === userId;
 
@@ -310,6 +320,7 @@ export function DashboardMap({
       {preferencesReady ? (
         <TrackingMap
           positions={positions}
+          now={now}
           trails={trails}
           className="h-full w-full"
           selectedDeviceId={selectedDeviceId}
@@ -337,7 +348,8 @@ export function DashboardMap({
         <div className="absolute top-3 left-14 right-14 z-[1000] flex justify-center transition-[right,transform] duration-200 group-has-[.leaflet-control-layers-expanded]:right-40 lg:left-1/2 lg:right-auto lg:-translate-x-1/2 lg:group-has-[.leaflet-control-layers-expanded]:-translate-x-[calc(50%+80px)]">
           <DashboardFollowBar
             vehicle={followedVehicle}
-            status={getVehicleOperationalStatus(followedVehicle)}
+            now={now}
+            status={getVehicleOperationalStatus(followedVehicle, now)}
             onExitFollow={handleCancelFollow}
           />
         </div>
@@ -377,6 +389,16 @@ export function DashboardMap({
         <div className="rounded-2xl border border-white/10 bg-background/88 px-3 py-2 text-xs font-semibold text-foreground shadow-[0_20px_40px_-24px_rgba(0,0,0,0.75)] backdrop-blur-xl">
           <span className="font-bold text-primary">{positions.length}</span>{" "}
           {positions.length === 1 ? "veículo" : "veículos"}
+          {/* Canal do navegador e idade do equipamento são informações independentes. */}
+          {connectionStatus !== "live" ? (
+            <p role="status" className="mt-1 max-w-[min(65vw,18rem)] text-[11px] font-normal text-amber-300">
+              {connectionStatus === "connecting"
+                ? "Conectando atualização ao vivo…"
+                : connectionStatus === "offline"
+                  ? "Navegador sem conexão; exibindo últimas posições."
+                  : "Atualização ao vivo indisponível; tentando recuperar."}
+            </p>
+          ) : null}
         </div>
       </div>
 

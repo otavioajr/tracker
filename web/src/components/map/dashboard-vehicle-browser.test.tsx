@@ -50,7 +50,7 @@ describe("DashboardVehicleBrowser", () => {
     expect(screen.getByRole("button", { name: "Todos" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Em movimento" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Parados" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Sem sinal" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Desatualizados" })).toBeTruthy();
     expect(screen.getByText("Truck 01")).toBeTruthy();
     expect(screen.getByText("Van 02")).toBeTruthy();
     expect(screen.getByText("2 veículos visíveis")).toBeTruthy();
