@@ -6,6 +6,8 @@ import dynamic from "next/dynamic";
 import { MapPinned } from "lucide-react";
 import type { DashboardVehicleTrail, VehiclePosition } from "./types";
 import {
+  CARTO_ATTRIBUTION,
+  CARTO_TILE_URLS,
   DEFAULT_MAP_BASE_LAYER,
   type MapBaseLayer,
 } from "@/lib/map/map-base-layer";
@@ -134,8 +136,8 @@ export function TrackingMap({
       <LayersControl position="topright">
         <LayersControlBaseLayer checked={activeBaseLayer === "Ruas"} name="Ruas">
           <TileLayer
-            attribution='&copy; <a href="https://carto.com/">CARTO</a>'
-            url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
+            attribution={CARTO_ATTRIBUTION}
+            url={CARTO_TILE_URLS.light}
           />
         </LayersControlBaseLayer>
         <LayersControlBaseLayer checked={activeBaseLayer === "Detalhado"} name="Detalhado">
@@ -152,8 +154,8 @@ export function TrackingMap({
         </LayersControlBaseLayer>
         <LayersControlBaseLayer checked={activeBaseLayer === "Escuro"} name="Escuro">
           <TileLayer
-            attribution='&copy; <a href="https://carto.com/">CARTO</a>'
-            url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+            attribution={CARTO_ATTRIBUTION}
+            url={CARTO_TILE_URLS.dark}
           />
         </LayersControlBaseLayer>
       </LayersControl>

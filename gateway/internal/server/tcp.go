@@ -14,6 +14,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/otavioajr/tracker/gateway/internal/config"
 	"github.com/otavioajr/tracker/gateway/internal/protocol"
 )
 
@@ -83,7 +84,7 @@ func New(cfg Config, registry *protocol.Registry, detector protocol.Detector, ha
 		cfg.ReadTimeout = 30 * time.Second
 	}
 	if cfg.IdleTimeout == 0 {
-		cfg.IdleTimeout = 60 * time.Second
+		cfg.IdleTimeout = config.DefaultIdleTimeout
 	}
 	if detector == nil {
 		detector = protocol.NewDefaultDetector()
@@ -186,7 +187,30 @@ func (s *Server) ActiveConnections() int64 {
 }
 
 func (s *Server) handleConnection(conn net.Conn) {
+	startedAt := time.Now()
+	var lastFrameAt time.Time
+	deviceID, parserName := "", "unknown"
+	phase, closeReason := "detection", "peer_closed"
+	frames := 0
 	defer func() {
+		select {
+		case <-s.quit:
+			closeReason = "server_shutdown"
+		default:
+		}
+		// Uma linha por sessão, sem endereço IP, payload, coordenadas ou ID completo.
+		if parserName != "unknown" {
+			attrs := []any{
+				"device_suffix", maskedDeviceSuffix(deviceID), "protocol", parserName,
+				"reason", closeReason, "phase", phase, "frames", frames,
+				"duration_seconds", time.Since(startedAt).Seconds(),
+				"idle_timeout", s.config.IdleTimeout.String(),
+			}
+			if !lastFrameAt.IsZero() {
+				attrs = append(attrs, "last_frame_age_seconds", time.Since(lastFrameAt).Seconds())
+			}
+			s.logger.Info("tracker connection closed", attrs...)
+		}
 		conn.Close()
 		s.mu.Lock()
 		delete(s.connections, conn)
@@ -251,6 +275,8 @@ func (s *Server) handleConnection(conn net.Conn) {
 	s.logger.Debug("protocol detected", "remote", remoteAddr, "family", detection.Family, "variant", detection.Variant, "protocol", detection.ParserName)
 
 	session := protocol.Session{Data: make(map[string]any)}
+	parserName = detection.ParserName
+	phase = "read"
 
 	for {
 		select {
@@ -259,15 +285,18 @@ func (s *Server) handleConnection(conn net.Conn) {
 		default:
 		}
 
-		conn.SetDeadline(time.Now().Add(s.config.IdleTimeout))
+		phase = "read"
+		// O intervalo entre relatórios não deve ampliar o prazo de escrita do ACK.
+		if err := conn.SetReadDeadline(time.Now().Add(s.config.IdleTimeout)); err != nil {
+			closeReason = "deadline_error"
+			return
+		}
 
 		frame, err := parser.ReadFrame(reader)
 		// Capture reception before parsing; ACK and storage queues can delay it.
 		receivedAt := time.Now().UTC()
 		if err != nil {
-			if err != io.EOF {
-				s.logger.Debug("connection closed", "remote", remoteAddr, "error", err)
-			}
+			closeReason = connectionCloseReason(err)
 			return
 		}
 
@@ -275,7 +304,12 @@ func (s *Server) handleConnection(conn net.Conn) {
 			continue
 		}
 
+		lastFrameAt = receivedAt
+		frames++
 		pos, err := parser.Parse(frame, &session)
+		if session.IMEI != "" {
+			deviceID = session.IMEI
+		}
 		if err != nil {
 			s.logger.Warn(
 				"parse error",
@@ -303,23 +337,64 @@ func (s *Server) handleConnection(conn net.Conn) {
 			if pos.IMEI == "" && session.IMEI != "" {
 				pos.IMEI = session.IMEI
 			}
+			deviceID = pos.IMEI // Suntech informa o identificador na posição, não na sessão.
 			s.handler.HandlePosition(pos, detection.Family, detection.Variant)
 		}
 
 		if ack := parser.ACK(frame, &session); ack != nil {
+			phase = "ack"
+			if err := conn.SetWriteDeadline(time.Now().Add(commandWriteTimeout)); err != nil {
+				closeReason = "deadline_error"
+				return
+			}
 			n, err := conn.Write(ack)
-			if err != nil || n != len(ack) {
+			if err != nil {
+				closeReason = connectionCloseReason(err)
+				return
+			}
+			if n != len(ack) {
+				closeReason = "short_write"
 				return
 			}
 		}
 
 		// Legacy commands use GT06 framing only, including login/heartbeat delivery.
 		if detection.ParserName == "gt06" && session.IMEI != "" {
+			phase = "command"
 			if err := s.flushCommands(conn, session.IMEI); err != nil {
+				closeReason = connectionCloseReason(err)
 				return
 			}
 		}
 	}
+}
+
+// Classifica erros sem registrar mensagens que possam conter endereços ou payloads.
+func connectionCloseReason(err error) string {
+	var netErr net.Error
+	switch {
+	case errors.Is(err, io.EOF):
+		return "peer_closed"
+	case errors.As(err, &netErr) && netErr.Timeout():
+		return "timeout"
+	case errors.Is(err, io.ErrUnexpectedEOF):
+		return "incomplete_frame"
+	default:
+		return "transport_or_frame_error"
+	}
+}
+
+func maskedDeviceSuffix(id string) string {
+	if len(id) <= 4 {
+		return "unknown"
+	}
+	// Só aceita dígitos para impedir que IDs inválidos vazem conteúdo do pacote.
+	for _, c := range id {
+		if c < '0' || c > '9' {
+			return "unknown"
+		}
+	}
+	return "***" + id[len(id)-4:]
 }
 
 func transportFingerprint(payload []byte) string {

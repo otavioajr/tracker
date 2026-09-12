@@ -11,6 +11,8 @@ import { HistorySelectedPointCard } from "@/components/map/history-selected-poin
 import { getVehicles } from "@/lib/actions/vehicles";
 import { getPositionHistory, VehiclePosition } from "@/lib/actions/positions";
 import {
+  CARTO_ATTRIBUTION,
+  CARTO_TILE_URLS,
   DEFAULT_MAP_BASE_LAYER,
   type MapBaseLayer,
 } from "@/lib/map/map-base-layer";
@@ -400,8 +402,8 @@ export function HistoryPlayer() {
               <LayersControl position="topright">
                 <LayersControlBaseLayer checked={baseLayer === "Ruas"} name="Ruas">
                   <TileLayer
-                    attribution='&copy; <a href="https://carto.com/">CARTO</a>'
-                    url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
+                    attribution={CARTO_ATTRIBUTION}
+                    url={CARTO_TILE_URLS.light}
                   />
                 </LayersControlBaseLayer>
                 <LayersControlBaseLayer checked={baseLayer === "Detalhado"} name="Detalhado">
@@ -418,8 +420,8 @@ export function HistoryPlayer() {
                 </LayersControlBaseLayer>
                 <LayersControlBaseLayer checked={baseLayer === "Escuro"} name="Escuro">
                   <TileLayer
-                    attribution='&copy; <a href="https://carto.com/">CARTO</a>'
-                    url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+                    attribution={CARTO_ATTRIBUTION}
+                    url={CARTO_TILE_URLS.dark}
                   />
                 </LayersControlBaseLayer>
               </LayersControl>

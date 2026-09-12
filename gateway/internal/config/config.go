@@ -7,7 +7,11 @@ import (
 	"time"
 )
 
+// DefaultIdleTimeout tolera relatórios a cada cinco minutos e atrasos de rede.
+const DefaultIdleTimeout = 10 * time.Minute
+
 type Config struct {
+	IdleTimeout time.Duration
 	TCPPort     int
 	DatabaseURL string
 	MetricsPort int
@@ -24,6 +28,7 @@ type Config struct {
 
 func Load() (*Config, error) {
 	cfg := &Config{
+		IdleTimeout:          DefaultIdleTimeout,
 		TCPPort:              5001,
 		MetricsPort:          9090,
 		CommandAddr:          "127.0.0.1:9091",
@@ -54,6 +59,15 @@ func Load() (*Config, error) {
 			return nil, fmt.Errorf("invalid METRICS_PORT: %w", err)
 		}
 		cfg.MetricsPort = p
+	}
+
+	// Rejeita valores que encerrariam conexões imediatamente ou desativariam o limite.
+	if value := os.Getenv("IDLE_TIMEOUT"); value != "" {
+		timeout, err := time.ParseDuration(value)
+		if err != nil || timeout <= 0 {
+			return nil, fmt.Errorf("invalid IDLE_TIMEOUT: expected a positive duration (e.g. 10m)")
+		}
+		cfg.IdleTimeout = timeout
 	}
 
 	if interval := os.Getenv("RULE_SYNC_INTERVAL"); interval != "" {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useReducer, useState } from "react";
+import { useCallback, useEffect, useEffectEvent, useReducer, useState } from "react";
 import dynamic from "next/dynamic";
 import { Compass, MapPinned, PanelRightClose } from "lucide-react";
 
@@ -176,7 +176,8 @@ export function DashboardMap({
     }
   );
 
-  useEffect(() => {
+  // Lê o storage após a hidratação, usando posições atuais sem reiniciar preferências a cada pacote.
+  const hydratePreferences = useEffectEvent(() => {
     if (!userId) {
       setMobileSheetState("collapsed");
       setHydratedPreferencesUserId(null);
@@ -203,6 +204,12 @@ export function DashboardMap({
       trailCursors: hydratedTrailCursors,
     });
     setHydratedPreferencesUserId(userId);
+  });
+
+  useEffect(() => {
+    // Cancela a leitura agendada se o usuário mudar ou o dashboard desmontar.
+    const timer = window.setTimeout(() => hydratePreferences(), 0);
+    return () => window.clearTimeout(timer);
   }, [userId]);
 
   const handleSelectVehicle = useCallback((deviceId: string) => {

@@ -21,6 +21,9 @@ const (
 
 	gt06StopHi = 0x0D
 	gt06StopLo = 0x0A
+
+	// Last ACC state from a heartbeat, scoped to this device's connection.
+	sessionKeyIgnition = "ignition"
 )
 
 // GT06Parser decodes the Concox/GT06 binary protocol used by GF07, GT02,
@@ -150,11 +153,24 @@ func (p *GT06Parser) Parse(data []byte, session *Session) (*Position, error) {
 	case gt06ProtoGPS, gt06ProtoGPSLBS, gt06ProtoAlarm:
 		return p.parseGPS(content[1:], session)
 	case gt06ProtoHeartbeat:
-		return nil, nil
+		return p.parseStatus(content[1:], session)
 	default:
 		// Unknown protocol number — silently skip
 		return nil, nil
 	}
+}
+
+// J16 reports ACC separately in heartbeat bit 1; later GPS frames inherit it.
+func (p *GT06Parser) parseStatus(data []byte, session *Session) (*Position, error) {
+	// The trailing serial is not terminal information; ignore an absent status byte.
+	if len(data) < 3 { // terminal information(1) + serial(2)
+		return nil, nil
+	}
+	if session.Data == nil {
+		session.Data = make(map[string]any)
+	}
+	session.Data[sessionKeyIgnition] = data[0]&0x02 != 0
+	return nil, nil
 }
 
 func (p *GT06Parser) parseLogin(data []byte, session *Session) (*Position, error) {
@@ -219,15 +235,17 @@ func (p *GT06Parser) parseGPS(data []byte, session *Session) (*Position, error) 
 	courseWord := binary.BigEndian.Uint16(data[16:18])
 	heading := float64(courseWord & 0x03FF) // bits 0-9: course 0-360
 
-	// Bit 10: 0=east, 1=west → negate longitude
-	if courseWord&(1<<10) != 0 {
+	// GT06 bit 10: 0 = south, 1 = north; bit 11: 1 = west, 0 = east.
+	// These flags describe different axes; swapping them relocates valid fixes.
+	if courseWord&0x0400 == 0 {
+		lat = -lat
+	}
+	if courseWord&0x0800 != 0 {
 		lon = -lon
 	}
 
-	// Bit 11: 0=north, 1=south → negate latitude
-	if courseWord&(1<<11) != 0 {
-		lat = -lat
-	}
+	// GPS 0x12 lacks ACC: retain the last heartbeat value, defaulting to off.
+	ignition, _ := session.Data[sessionKeyIgnition].(bool)
 
 	return &Position{
 		IMEI:       session.IMEI,
@@ -236,6 +254,7 @@ func (p *GT06Parser) parseGPS(data []byte, session *Session) (*Position, error) 
 		Speed:      speed,
 		Heading:    heading,
 		Satellites: sats,
+		Ignition:   ignition,
 		DeviceTime: deviceTime,
 		RawData:    hex.EncodeToString(data),
 	}, nil

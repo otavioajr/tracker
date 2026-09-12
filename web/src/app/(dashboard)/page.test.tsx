@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import React from "react";
+// Este teste chama o componente diretamente; não precisa do runtime JSX.
 import { render } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 

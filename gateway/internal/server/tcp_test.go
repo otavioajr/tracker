@@ -1,10 +1,16 @@
 package server
 
 import (
+	"bytes"
 	"encoding/hex"
+	"errors"
 	"fmt"
+	"io"
+	"log/slog"
 	"math"
 	"net"
+	"os"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -107,6 +113,101 @@ func waitFor(t *testing.T, timeout time.Duration, predicate func() bool) {
 		time.Sleep(10 * time.Millisecond)
 	}
 	t.Fatalf("timed out waiting for condition")
+}
+
+// net.Pipe exercita prazos reais sem abrir portas ou esperar minutos nos testes.
+func TestTCPServer_IdleLifecycle(t *testing.T) {
+	for _, reason := range []string{"timeout", "peer_closed", "server_shutdown"} {
+		t.Run(reason, func(t *testing.T) {
+			var logs bytes.Buffer
+			handler := &mockHandler{}
+			srv := New(Config{
+				ReadTimeout: 50 * time.Millisecond,
+				IdleTimeout: time.Second,
+				Logger:      slog.New(slog.NewJSONHandler(&logs, nil)),
+			}, protocol.NewRegistry(protocol.NewSuntechParser()), nil, handler)
+			serverConn, client := net.Pipe()
+			srv.connections[serverConn] = struct{}{}
+			srv.activeConn.Add(1)
+			srv.wg.Add(1)
+			done := make(chan struct{})
+			go func() { srv.handleConnection(serverConn); close(done) }()
+			t.Cleanup(func() { client.Close(); srv.Stop() })
+			client.SetWriteDeadline(time.Now().Add(3 * time.Second))
+
+			writePosition := func(clock string) {
+				t.Helper()
+				msg := "ST300STT;123456789012345;04;374;20260318;" + clock + ";0CD4A;-23.55;-046.63;0;0;11;1;0;12.24\r\n"
+				if _, err := io.WriteString(client, msg); err != nil {
+					t.Fatal(err)
+				}
+			}
+			writePosition("10:30:00")
+			waitFor(t, time.Second, func() bool { return len(handler.positionsSnapshot()) == 1 })
+			// O prazo curto de identificação não pode encerrar uma sessão já identificada.
+			select {
+			case <-done:
+				t.Fatal("connection closed between reports")
+			case <-time.After(150 * time.Millisecond):
+			}
+			writePosition("10:35:00")
+			waitFor(t, time.Second, func() bool { return len(handler.positionsSnapshot()) == 2 })
+			positions := handler.positionsSnapshot()
+			if !positions[1].DeviceTime.After(positions[0].DeviceTime) || positions[1].Latitude != -23.55 || positions[1].Longitude != -46.63 {
+				t.Fatal("second position changed coordinates or measurement ordering")
+			}
+			switch reason {
+			case "peer_closed":
+				client.Close()
+			case "server_shutdown":
+				srv.Stop()
+			}
+			select {
+			case <-done:
+			case <-time.After(3 * time.Second):
+				t.Fatal("connection did not close")
+			}
+			output := logs.String() // A goroutine terminou; não há leitura concorrente do buffer.
+			for _, expected := range []string{"tracker connection closed", `"reason":"` + reason + `"`, `"device_suffix":"***2345"`, `"frames":2`, `"phase":"read"`} {
+				if !strings.Contains(output, expected) {
+					t.Fatalf("missing %s in %s", expected, output)
+				}
+			}
+			for _, sensitive := range []string{"123456789012345", "-23.55", "-046.63", "ST300STT", `"remote"`} {
+				if strings.Contains(output, sensitive) {
+					t.Fatalf("log exposed %q", sensitive)
+				}
+			}
+		})
+	}
+}
+
+func TestTCPServer_DefaultIdleTimeout(t *testing.T) {
+	srv := New(Config{}, protocol.NewRegistry(), nil, &mockHandler{})
+	if srv.config.IdleTimeout != 10*time.Minute {
+		t.Fatalf("default = %v, want 10m", srv.config.IdleTimeout)
+	}
+}
+
+func TestConnectionCloseReason(t *testing.T) {
+	for _, tc := range []struct {
+		err  error
+		want string
+	}{
+		{fmt.Errorf("wrapped: %w", io.EOF), "peer_closed"},
+		{fmt.Errorf("wrapped: %w", os.ErrDeadlineExceeded), "timeout"},
+		{io.ErrUnexpectedEOF, "incomplete_frame"},
+		{errors.New("private payload"), "transport_or_frame_error"},
+	} {
+		if got := connectionCloseReason(tc.err); got != tc.want {
+			t.Errorf("reason = %s, want %s", got, tc.want)
+		}
+	}
+	for _, id := range []string{"", "1234", "private-payload"} {
+		if maskedDeviceSuffix(id) != "unknown" {
+			t.Errorf("unsafe identifier %q", id)
+		}
+	}
 }
 
 func TestTCPServer_AcceptsConnection(t *testing.T) {
@@ -252,7 +353,8 @@ func TestTCPServer_GT06LoginAndGPS(t *testing.T) {
 
 	// Send GPS packet (protocol 0x12) — same test vector from gt06_test.go
 	// Position: lat -23.5505, lon -46.6333, speed 45, heading 127, 8 sats
-	gps, _ := hex.DecodeString("787817121A03120A1E00800286D5740500D2642D0C7F0001AAAA0D0A")
+	// Course/status 0x087F: bit 10 clear = south; bit 11 set = west.
+	gps, _ := hex.DecodeString("787817121A03120A1E00800286D5740500D2642D087F0001AAAA0D0A")
 	conn.Write(gps)
 
 	waitFor(t, 2*time.Second, func() bool {

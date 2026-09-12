@@ -60,7 +60,7 @@ func TestGT06ReadFrame(t *testing.T) {
 
 	t.Run("long packet", func(t *testing.T) {
 		// Long frame with GPS content: 79 79 00 17 [content(21)] [CRC(2)] 0D 0A
-		data, _ := hex.DecodeString("79790017121A03120A1E00800286D5740500D2642D0C7F0001CCCC0D0A")
+		data, _ := hex.DecodeString("79790017121A03120A1E00800286D5740500D2642D087F0001CCCC0D0A")
 		reader := bufio.NewReader(bytes.NewReader(data))
 
 		frame, err := p.ReadFrame(reader)
@@ -142,10 +142,10 @@ func TestGT06ParseGPS(t *testing.T) {
 		// Lat: 23.5505° → raw 42390900 = 0x0286D574
 		// Lon: 46.6333° → raw 83939940 = 0x0500D264
 		// Speed: 45 → 0x2D
-		// Course: south+west+127° → bit11=1, bit10=1, bits0-9=127 → 0x0C7F
+		// Course: south+west+127° → bit10=0 (south), bit11=1 (west), bits0-9=127 → 0x087F
 		// Serial: 0x0001
 		// Length field: content(21) + CRC(2) = 23 = 0x17
-		data, _ := hex.DecodeString("787817121A03120A1E00800286D5740500D2642D0C7F0001AAAA0D0A")
+		data, _ := hex.DecodeString("787817121A03120A1E00800286D5740500D2642D087F0001AAAA0D0A")
 
 		session := &Session{IMEI: "358899050127810"}
 		pos, err := p.Parse(data, session)
@@ -198,7 +198,7 @@ func TestGT06ParseGPS(t *testing.T) {
 	t.Run("GPS+LBS packet parsed like GPS", func(t *testing.T) {
 		// Same GPS data but with protocol number 0x22 (GPS+LBS)
 		// The GPS portion is identical; LBS data follows after but we only parse GPS part
-		data, _ := hex.DecodeString("787817221A03120A1E00800286D5740500D2642D0C7F0001AAAA0D0A")
+		data, _ := hex.DecodeString("787817221A03120A1E00800286D5740500D2642D087F0001AAAA0D0A")
 
 		session := &Session{IMEI: "123456789012345"}
 		pos, err := p.Parse(data, session)
@@ -215,7 +215,7 @@ func TestGT06ParseGPS(t *testing.T) {
 
 	t.Run("alarm packet parsed like GPS", func(t *testing.T) {
 		// Same GPS data but with protocol number 0x26 (Alarm)
-		data, _ := hex.DecodeString("787817261A03120A1E00800286D5740500D2642D0C7F0001AAAA0D0A")
+		data, _ := hex.DecodeString("787817261A03120A1E00800286D5740500D2642D087F0001AAAA0D0A")
 
 		session := &Session{IMEI: "123456789012345"}
 		pos, err := p.Parse(data, session)
@@ -230,31 +230,116 @@ func TestGT06ParseGPS(t *testing.T) {
 		}
 	})
 
-	t.Run("north-east coordinates", func(t *testing.T) {
-		// Course word with bit10=0 (east) and bit11=0 (north): just heading 90° = 0x005A
-		// Lat ~10.0, Lon ~20.0
-		// latRaw = 10.0 * 60 * 30000 = 18000000 = 0x01129500
-		// lonRaw = 20.0 * 60 * 30000 = 36000000 = 0x02255100
-		data, _ := hex.DecodeString("78781712" + "1A03120A1E00" + "80" + "01129500" + "02255100" + "2D" + "005A" + "0001" + "AAAA" + "0D0A")
+	// Independent course words cover every hemisphere without reusing decoder logic.
+	for _, tt := range []struct {
+		name   string
+		course string
+		lat    float64
+		lon    float64
+	}{
+		{"north-east", "045A", 10, 20},
+		{"north-west", "0C5A", 10, -20},
+		{"south-east", "005A", -10, 20},
+		{"south-west", "085A", -10, -20},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			// Unsigned coordinates: 10° = 0x0112A880; 20° = 0x02255100.
+			data, err := hex.DecodeString("787817121A03120A1E00800112A880022551002D" + tt.course + "0001AAAA0D0A")
+			if err != nil {
+				t.Fatal(err)
+			}
+			pos, err := p.Parse(data, &Session{IMEI: "test_imei"})
+			if err != nil {
+				t.Fatalf("Parse error: %v", err)
+			}
+			if pos == nil {
+				t.Fatal("expected position")
+			}
+			if math.Abs(pos.Latitude-tt.lat) > 0.000001 || math.Abs(pos.Longitude-tt.lon) > 0.000001 {
+				t.Errorf("coordinates = (%f, %f), want (%f, %f)", pos.Latitude, pos.Longitude, tt.lat, tt.lon)
+			}
+			if pos.Heading != 90 {
+				t.Errorf("Heading = %f, want 90", pos.Heading)
+			}
+		})
+	}
+}
 
-		session := &Session{IMEI: "test_imei"}
-		pos, err := p.Parse(data, session)
-		if err != nil {
-			t.Fatalf("Parse error: %v", err)
+// Captured J16 frame from the old regression: swapped flags placed São Paulo east of Greenwich.
+func TestGT06ParseGPSRealFrameJ16(t *testing.T) {
+	data, err := hex.DecodeString("78781f121a0603012127ca0288a5800503b01000080002d403798d00240b000718af0d0a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	pos, err := NewGT06Parser().Parse(data, &Session{IMEI: "test_imei"})
+	if err != nil || pos == nil {
+		t.Fatalf("Parse = (%v, %v), want position", pos, err)
+	}
+	if math.Abs(pos.Latitude-(-23.6165)) > 0.001 || math.Abs(pos.Longitude-(-46.7376)) > 0.001 {
+		t.Errorf("coordinates = (%f, %f), want São Paulo (-23.6165, -46.7376)", pos.Latitude, pos.Longitude)
+	}
+	if pos.Speed != 0 || pos.Satellites != 12 {
+		t.Errorf("speed/satellites = %f/%d, want 0/12", pos.Speed, pos.Satellites)
+	}
+}
+
+// J16 sends ACC separately; retain it per connection without manufacturing heartbeat positions.
+func TestGT06IgnitionFromStatusPacket(t *testing.T) {
+	p := NewGT06Parser()
+	session := &Session{IMEI: "test_imei"}
+	gps, err := hex.DecodeString("78781f121a0603012127ca0288a5800503b01000080002d403798d00240b000718af0d0a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertIgnition := func(t *testing.T, session *Session, want bool) {
+		t.Helper()
+		pos, err := p.Parse(gps, session)
+		if err != nil || pos == nil {
+			t.Fatalf("Parse GPS = (%v, %v), want position", pos, err)
 		}
-		if pos == nil {
-			t.Fatal("expected position")
+		if pos.Ignition != want {
+			t.Errorf("Ignition = %v, want %v", pos.Ignition, want)
 		}
-		if pos.Latitude < 9.9 || pos.Latitude > 10.1 {
-			t.Errorf("Latitude = %f, want ~10.0", pos.Latitude)
-		}
-		if pos.Longitude < 19.9 || pos.Longitude > 20.1 {
-			t.Errorf("Longitude = %f, want ~20.0", pos.Longitude)
-		}
-		if pos.Heading != 90 {
-			t.Errorf("Heading = %f, want 90", pos.Heading)
-		}
-	})
+	}
+	assertIgnition(t, session, false)
+	for _, tt := range []struct {
+		name  string
+		frame string
+		want  bool
+	}{
+		{"ACC on", "78780a1302040400010009aaaa0d0a", true},
+		// A serial-only heartbeat has no terminal byte; it must preserve state.
+		{"missing terminal info", "787805130000aaaa0d0a", true},
+		{"ACC off with other bits set", "78780a13fd040400010009aaaa0d0a", false},
+		{"ACC on with other bits set", "78780a13ff040400010009aaaa0d0a", true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			frame, err := hex.DecodeString(tt.frame)
+			if err != nil {
+				t.Fatal(err)
+			}
+			pos, err := p.Parse(frame, session)
+			if err != nil || pos != nil {
+				t.Fatalf("Parse heartbeat = (%v, %v), want (nil, nil)", pos, err)
+			}
+			assertIgnition(t, session, tt.want)
+			assertIgnition(t, session, tt.want) // Subsequent GPS frames retain the last status.
+			assertIgnition(t, &Session{IMEI: "other_device"}, false)
+		})
+	}
+	// Preserve other per-connection metadata when the map already exists.
+	if session.Data == nil {
+		t.Fatal("heartbeat did not initialize session metadata")
+	}
+	session.Data["unrelated"] = "preserved"
+	off, _ := hex.DecodeString("78780a1301040400010009aaaa0d0a")
+	if _, err := p.Parse(off, session); err != nil {
+		t.Fatal(err)
+	}
+	assertIgnition(t, session, false)
+	if session.Data["unrelated"] != "preserved" {
+		t.Fatal("heartbeat overwrote unrelated session metadata")
+	}
 }
 
 func TestGT06ParseHeartbeat(t *testing.T) {
@@ -337,7 +422,7 @@ func TestGT06ACK(t *testing.T) {
 	})
 
 	t.Run("GPS packet returns no ACK", func(t *testing.T) {
-		data, _ := hex.DecodeString("787817121A03120A1E00800286D5740500D2642D0C7F0001AAAA0D0A")
+		data, _ := hex.DecodeString("787817121A03120A1E00800286D5740500D2642D087F0001AAAA0D0A")
 		session := &Session{}
 
 		ack := p.ACK(data, session)

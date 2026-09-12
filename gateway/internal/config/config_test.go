@@ -2,6 +2,7 @@ package config
 
 import (
 	"testing"
+	"time"
 )
 
 func TestLoad_Defaults(t *testing.T) {
@@ -35,6 +36,41 @@ func TestLoad_Defaults(t *testing.T) {
 	}
 	if cfg.CommandAddr != "127.0.0.1:9091" {
 		t.Errorf("CommandAddr = %q, want 127.0.0.1:9091", cfg.CommandAddr)
+	}
+}
+
+// O limite precisa ter margem sobre relatórios de cinco minutos e aceitar ajustes explícitos.
+func TestLoad_IdleTimeout(t *testing.T) {
+	for _, tc := range []struct {
+		value   string
+		want    time.Duration
+		invalid bool
+	}{
+		{"", 10 * time.Minute, false},
+		{"15m", 15 * time.Minute, false},
+		{"90s", 90 * time.Second, false},
+		{"0s", 0, true},
+		{"-1m", 0, true},
+		{"invalid", 0, true},
+		{"600", 0, true},
+	} {
+		t.Run("value="+tc.value, func(t *testing.T) {
+			t.Setenv("DATABASE_URL", "postgres://test:test@localhost/test")
+			t.Setenv("IDLE_TIMEOUT", tc.value)
+			cfg, err := Load()
+			if tc.invalid {
+				if err == nil {
+					t.Fatal("expected invalid timeout error")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if cfg.IdleTimeout != tc.want {
+				t.Fatalf("IdleTimeout = %v, want %v", cfg.IdleTimeout, tc.want)
+			}
+		})
 	}
 }
 

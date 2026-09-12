@@ -118,8 +118,9 @@ func main() {
 
 	// TCP server
 	tcpServer := server.New(server.Config{
-		Port:   cfg.TCPPort,
-		Logger: logger,
+		Port:        cfg.TCPPort,
+		IdleTimeout: cfg.IdleTimeout, // Usa o prazo validado, não o antigo limite de 60s.
+		Logger:      logger,
 	}, registry, protocol.NewDefaultDetector(), gw)
 
 	// Bind before accepting trackers: a missing command endpoint must fail startup visibly.
@@ -154,7 +155,7 @@ func main() {
 		}
 	}()
 
-	logger.Info("tracker gateway started", "tcp_port", cfg.TCPPort, "metrics_port", cfg.MetricsPort, "command_addr", cfg.CommandAddr)
+	logger.Info("tracker gateway started", "tcp_port", cfg.TCPPort, "metrics_port", cfg.MetricsPort, "command_addr", cfg.CommandAddr, "idle_timeout", cfg.IdleTimeout.String())
 
 	// Wait for shutdown signal
 	sigCh := make(chan os.Signal, 1)

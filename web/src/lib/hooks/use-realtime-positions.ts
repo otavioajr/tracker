@@ -38,8 +38,7 @@ export function useRealtimePositionsState(initialPositions: VehiclePosition[]): 
   const [connectionStatus, setConnectionStatus] =
     useState<RealtimeConnectionStatus>("connecting");
   const supabaseRef = useRef(createClient());
-  const positionsRef = useRef(positions);
-  positionsRef.current = positions;
+  // Atualizações funcionais abaixo já usam o estado atual, sem ref durante render.
 
   const applySnapshot = useCallback((incoming: VehiclePosition[]) => {
     setPositions((current) => reconcilePositions(current, incoming));
@@ -57,7 +56,9 @@ export function useRealtimePositionsState(initialPositions: VehiclePosition[]): 
   }, [applySnapshot]);
 
   useEffect(() => {
-    applySnapshot(initialPositions);
+    // Aplica snapshots do servidor após o commit e cancela snapshots já substituídos.
+    const timer = window.setTimeout(() => applySnapshot(initialPositions), 0);
+    return () => window.clearTimeout(timer);
   }, [applySnapshot, initialPositions]);
 
   useEffect(() => {

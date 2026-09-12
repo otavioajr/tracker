@@ -7,6 +7,25 @@ import {
   normalizeDashboardMapUiPreferences,
 } from "./dashboard-map-preferences";
 
+// Impede que futuras integrações voltem a omitir a chave pública nas duas camadas.
+describe("CARTO authentication", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.resetModules();
+  });
+
+  it("encodes the build-time key for both styles and keeps attribution", async () => {
+    vi.stubEnv("NEXT_PUBLIC_CARTO_API_KEY", " test+key&value ");
+    vi.resetModules();
+    const { CARTO_TILE_URLS, CARTO_ATTRIBUTION } = await import("./map-base-layer");
+    for (const [style, url] of Object.entries(CARTO_TILE_URLS)) {
+      expect(url).toBe(`https://{s}.basemaps.cartocdn.com/rastertiles/${style}_all/{z}/{x}/{y}{r}.png?key=test%2Bkey%26value`);
+    }
+    expect(CARTO_ATTRIBUTION).toContain("openstreetmap.org/copyright");
+    expect(CARTO_ATTRIBUTION).toContain("carto.com/attributions");
+  });
+});
+
 describe("dashboard-map-preferences", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
