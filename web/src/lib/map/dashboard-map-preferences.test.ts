@@ -7,6 +7,38 @@ import {
   normalizeDashboardMapUiPreferences,
 } from "./dashboard-map-preferences";
 
+// Evita regressão dos mapas compartilhados sem autenticação após novas integrações.
+describe("CARTO basemap authentication", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.resetModules();
+  });
+
+  it("uses the public key encoded in both raster tile URLs", async () => {
+    vi.stubEnv("NEXT_PUBLIC_CARTO_API_KEY", " test+key&value ");
+    vi.resetModules();
+    const { CARTO_TILE_URLS, CARTO_ATTRIBUTION } = await import("./map-base-layer");
+
+    expect(CARTO_TILE_URLS.light).toBe(
+      "https://{s}.basemaps.cartocdn.com/rastertiles/light_all/{z}/{x}/{y}{r}.png?key=test%2Bkey%26value"
+    );
+    expect(CARTO_TILE_URLS.dark).toBe(
+      "https://{s}.basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}{r}.png?key=test%2Bkey%26value"
+    );
+    expect(CARTO_ATTRIBUTION).toContain("openstreetmap.org/copyright");
+    expect(CARTO_ATTRIBUTION).toContain("carto.com/attributions");
+  });
+
+  it("does not interpolate undefined when the public key is absent", async () => {
+    vi.stubEnv("NEXT_PUBLIC_CARTO_API_KEY", undefined);
+    vi.resetModules();
+    const { CARTO_TILE_URLS } = await import("./map-base-layer");
+
+    expect(CARTO_TILE_URLS.light).toMatch(/\?key=$/);
+    expect(CARTO_TILE_URLS.dark).toMatch(/\?key=$/);
+  });
+});
+
 describe("dashboard-map-preferences", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
